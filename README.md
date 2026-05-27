@@ -20,3 +20,6 @@ pip install pygame
 
 # 运行游戏
 python 枪战/枪战.py
+---
+*Wit beyond measure is man's greatest treasure.*
+*记录每一行代码，就像记录每一份智慧。*
