@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>粘液揉捏模拟器</title>
+    <style>
+        * { margin: 0; padding: 0; }
+        body {
+            overflow: hidden;
+            background: #1a1a2e;
+            cursor: none;
+        }
+        canvas { display: block; }
+        #ui {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 12px;
+            z-index: 10;
+        }
+        .color-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: 3px solid rgba(255,255,255,0.3);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .color-btn:hover { transform: scale(1.2); }
+        .color-btn.active { border-color: #fff; box-shadow: 0 0 15px currentColor; }
+        #cursor {
+            position: fixed;
+            width: 30px;
+            height: 30px;
+            border: 2px solid rgba(255,255,255,0.6);
+            border-radius: 50%;
+            pointer-events: none;
+            transform: translate(-50%, -50%);
+            z-index: 100;
+            mix-blend-mode: difference;
+            transition: width 0.2s, height 0.2s;
+        }
+        #hint {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255,255,255,0.3);
+            font: 14px 'Courier New', monospace;
+            pointer-events: none;
+            letter-spacing: 2px;
+        }
+    </style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="cursor"></div>
+<div id="hint">CLICK & DRAG TO PLAY WITH SLIME</div>
+<div id="ui">
+    <div class="color-btn active" style="background:#ff6b9d" data-color="#ff6b9d"></div>
+    <div class="color-btn" style="background:#c084fc" data-color="#c084fc"></div>
+    <div class="color-btn" style="background:#67e8f9" data-color="#67e8f9"></div>
+    <div class="color-btn" style="background:#4ade80" data-color="#4ade80"></div>
+    <div class="color-btn" style="background:#fbbf24" data-color="#fbbf24"></div>
+    <div class="color-btn" style="background:#fb923c" data-color="#fb923c"></div>
+    <div class="color-btn" style="background:#f472b6" data-color="#f472b6"></div>
+</div>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const cursor = document.getElementById('cursor');
+let W, H;
+
+function resize() {
+    W = canvas.width = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+}
+resize();
+window.addEventListener('resize', resize);
+
+// 状态
+let mouseDown = false;
+let mouseX = W / 2, mouseY = H / 2;
+let prevMouseX = mouseX, prevMouseY = mouseY;
+let currentColor = '#ff6b9d';
+let dragTarget = null;
+
+// ========== 粘液粒子 ==========
+class SlimeBlob {
+    constructor(x, y, color) {
+        this.x = x;
+        this.y = y;
+        this.vx = (Math.random() - 0.5) * 2;
+        this.vy = (Math.random() - 0.5) * 2;
+        this.baseRadius = 25 + Math.random() * 20;
+        this.radius = this.baseRadius;
+        this.color = color || currentColor;
+        this.rgb = hexToRgb(this.color);
+        this.phase = Math.random() * Math.PI * 2;
+        this.phaseSpeed = 0.03 + Math.random() * 0.02;
+
+        // 形变状态
+        this.stretchX = 1;
+        this.stretchY = 1;
+        this.rotation = 0;
+
+        // 连接状态
+        this.connections = [];
+
+        // 被拖拽状态
+        this.isDragged = false;
+    }
+
+    update(time) {
+        // 呼吸感脉动
+        this.phase += this.phaseSpeed;
+        const pulse = Math.sin(this.phase) * 0.1;
+
+        // 弹性恢复形变
+        this.stretchX += (1 - this.stretchX) * 0.1;
+        this.stretchY += (1 - this.stretchY) * 0.1;
+        this.rotation *= 0.95;
+
+        if (!this.isDragged) {
+            // 自然漂浮
+            this.vx += (Math.random() - 0.5) * 0.1;
+            this.vy += (Math.random() - 0.5) * 0.1;
+
+            // 边界反弹
+            const margin = this.radius;
+            if (this.x < margin) this.vx += 0.5;
+            if (this.x > W - margin) this.vx -= 0.5;
+            if (this.y < margin) this.vy += 0.5;
+            if (this.y > H - margin) this.vy -= 0.5;
+
+            // 粘滞阻力
+            this.vx *= 0.96;
+            this.vy *= 0.96;
+
+            this.x += this.vx;
+            this.y += this.vy;
+        }
+
+        // 半径脉动
+        this.radius = this.baseRadius * (1 + pulse);
+    }
+
+    draw() {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.rotation);
+
+        // 主体 - 多层渐变
+        const r = this.radius;
+
+        // 外层光晕
+        ctx.globalAlpha = 0.15;
+        const glow = ctx.createRadialGradient(0, 0, r * 0.5, 0, 0, r * 1.8);
+        glow.addColorStop(0, `rgba(${this.rgb.r},${this.rgb.g},${this.rgb.b},0.4)`);
+        glow.addColorStop(1, 'transparent');
+        ctx.fillStyle = glow;
+        ctx.beginPath();
+        ctx.arc(0, 0, r * 1.8, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 主体
+        ctx.globalAlpha = 0.85;
+        const mainGrad = ctx.createRadialGradient(-r * 0.3, -r * 0.3, 0, 0, 0, r);
+        mainGrad.addColorStop(0, `rgba(${Math.min(255, this.rgb.r + 80)},${Math.min(255, this.rgb.g + 80)},${Math.min(255, this.rgb.b + 80)},1)`);
+        mainGrad.addColorStop(0.5, this.color);
+        mainGrad.addColorStop(1, `rgba(${Math.max(0, this.rgb.r - 60)},${Math.max(0, this.rgb.g - 60)},${Math.max(0, this.rgb.b - 60)},1)`);
+
+        ctx.scale(this.stretchX, this.stretchY);
+        ctx.fillStyle = mainGrad;
+        ctx.beginPath();
+        ctx.arc(0, 0, r, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 高光
+        ctx.globalAlpha = 0.6;
+        ctx.scale(1 / this.stretchX, 1 / this.stretchY);
+        const highlight = ctx.createRadialGradient(-r * 0.25, -r * 0.25, 0, -r * 0.25, -r * 0.25, r * 0.5);
+        highlight.addColorStop(0, 'rgba(255,255,255,0.8)');
+        highlight.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = highlight;
+        ctx.beginPath();
+        ctx.arc(-r * 0.25, -r * 0.25, r * 0.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore();
+    }
+}
+
+// ========== 连接桥（两个粘液之间的融合） ==========
+function drawConnection(blob1, blob2, strength) {
+    const dx = blob2.x - blob1.x;
+    const dy = blob2.y - blob1.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const maxDist = blob1.radius + blob2.radius + 60;
+
+    if (dist > maxDist) return;
+
+    const angle = Math.atan2(dy, dx);
+    const r1 = blob1.radius * 0.7;
+    const r2 = blob2.radius * 0.7;
+
+    const midX = (blob1.x + blob2.x) / 2;
+    const midY = (blob1.y + blob2.y) / 2;
+    const midR = (r1 + r2) * 0.5 * (1 - dist / maxDist) * strength;
+
+    // 混合颜色
+    const r = Math.floor((blob1.rgb.r + blob2.rgb.r) / 2);
+    const g = Math.floor((blob1.rgb.g + blob2.rgb.g) / 2);
+    const b = Math.floor((blob1.rgb.b + blob2.rgb.b) / 2);
+
+    ctx.save();
+    ctx.globalAlpha = 0.6 * (1 - dist / maxDist);
+    ctx.fillStyle = `rgb(${r},${g},${b})`;
+
+    ctx.beginPath();
+    ctx.moveTo(
+        blob1.x + Math.cos(angle + Math.PI / 2) * r1,
+        blob1.y + Math.sin(angle + Math.PI / 2) * r1
+    );
+    ctx.quadraticCurveTo(
+        midX + Math.cos(angle + Math.PI / 2) * midR,
+        midY + Math.sin(angle + Math.PI / 2) * midR,
+        blob2.x + Math.cos(angle + Math.PI / 2) * r2,
+        blob2.y + Math.sin(angle + Math.PI / 2) * r2
+    );
+    ctx.quadraticCurveTo(
+        midX - Math.cos(angle + Math.PI / 2) * midR,
+        midY - Math.sin(angle + Math.PI / 2) * midR,
+        blob1.x - Math.cos(angle + Math.PI / 2) * r1,
+        blob1.y - Math.sin(angle + Math.PI / 2) * r1
+    );
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.restore();
+}
+
+// ========== 拖拽拉伸效果 ==========
+function drawDragTrail(blob) {
+    if (!blob.isDragged) return;
+
+    const dx = mouseX - blob.x;
+    const dy = mouseY - blob.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const angle = Math.atan2(dy, dx);
+
+    // 拖拽变形
+    blob.stretchX = 1 + Math.min(dist * 0.01, 0.5);
+    blob.stretchY = 1 - Math.min(dist * 0.005, 0.2);
+    blob.rotation = Math.atan2(blob.vy, blob.vx);
+
+    // 绘制拉伸的粘液丝
+    ctx.save();
+    ctx.globalAlpha = 0.5;
+
+    const grad = ctx.createLinearGradient(blob.x, blob.y, mouseX, mouseY);
+    grad.addColorStop(0, blob.color);
+    grad.addColorStop(1, `rgba(${blob.rgb.r},${blob.rgb.g},${blob.rgb.b},0.2)`);
+
+    ctx.strokeStyle = grad;
+    ctx.lineWidth = blob.radius * 0.8 * (1 - Math.min(dist / 200, 0.7));
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(blob.x, blob.y);
+
+    // 贝塞尔曲线让拉伸更自然
+    const cpx = blob.x + dx * 0.3 + (Math.random() - 0.5) * 10;
+    const cpy = blob.y + dy * 0.3 + (Math.random() - 0.5) * 10;
+    ctx.quadraticCurveTo(cpx, cpy, mouseX, mouseY);
+    ctx.stroke();
+
+    ctx.restore();
+}
+
+// ========== 初始化粘液 ==========
+const blobs = [];
+function initBlobs() {
+    const count = 15;
+    for (let i = 0; i < count; i++) {
+        const colors = ['#ff6b9d', '#c084fc', '#67e8f9', '#4ade80', '#fbbf24', '#fb923c', '#f472b6'];
+        blobs.push(new SlimeBlob(
+            W * 0.2 + Math.random() * W * 0.6,
+            H * 0.2 + Math.random() * H * 0.6,
+            colors[Math.floor(Math.random() * colors.length)]
+        ));
+    }
+}
+initBlobs();
+
+// ========== 工具函数 ==========
+function hexToRgb(hex) {
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return result ? {
+        r: parseInt(result[1], 16),
+        g: parseInt(result[2], 16),
+        b: parseInt(result[3], 16)
+    } : { r: 255, g: 107, b: 157 };
+}
+
+// ========== 鼠标事件 ==========
+document.addEventListener('mousedown', e => {
+    mouseDown = true;
+    prevMouseX = mouseX = e.clientX;
+    prevMouseY = mouseY = e.clientY;
+
+    // 检测点击的粘液
+    for (let i = blobs.length - 1; i >= 0; i--) {
+        const b = blobs[i];
+        const dist = Math.hypot(e.clientX - b.x, e.clientY - b.y);
+        if (dist < b.radius * 1.5) {
+            dragTarget = b;
+            b.isDragged = true;
+            break;
+        }
+    }
+});
+
+document.addEventListener('mousemove', e => {
+    prevMouseX = mouseX;
+    prevMouseY = mouseY;
+    mouseX = e.clientX;
+    mouseY = e.clientY;
+
+    cursor.style.left = mouseX + 'px';
+    cursor.style.top = mouseY + 'px';
+
+    if (mouseDown && dragTarget) {
+        // 拖拽粘液
+        dragTarget.x += (mouseX - dragTarget.x) * 0.3;
+        dragTarget.y += (mouseY - dragTarget.y) * 0.3;
+        dragTarget.vx = (mouseX - prevMouseX) * 0.5;
+        dragTarget.vy = (mouseY - prevMouseY) * 0.5;
+    }
+});
+
+document.addEventListener('mouseup', () => {
+    mouseDown = false;
+    if (dragTarget) {
+        dragTarget.isDragged = false;
+        dragTarget = null;
+    }
+});
+
+// ========== 颜色选择 ==========
+document.querySelectorAll('.color-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentColor = btn.dataset.color;
+    });
+});
+
+// ========== 双击添加粘液 ==========
+canvas.addEventListener('dblclick', e => {
+    const newBlob = new SlimeBlob(e.clientX, e.clientY, currentColor);
+    newBlob.baseRadius = 30 + Math.random() * 15;
+    blobs.push(newBlob);
+    // 限制数量
+    if (blobs.length > 25) blobs.shift();
+});
+
+// ========== 右键挤压 ==========
+canvas.addEventListener('contextmenu', e => {
+    e.preventDefault();
+    blobs.forEach(b => {
+        const dx = b.x - e.clientX;
+        const dy = b.y - e.clientY;
+        const dist = Math.hypot(dx, dy);
+        if (dist < 200) {
+            const force = (200 - dist) / 200;
+            b.vx += (dx / dist) * force * 8;
+            b.vy += (dy / dist) * force * 8;
+            b.stretchX = 1.3;
+            b.stretchY = 0.7;
+        }
+    });
+});
+
+// ========== 背景绘制 ==========
+function drawBackground() {
+    ctx.fillStyle = '#1a1a2e';
+    ctx.fillRect(0, 0, W, H);
+
+    // 微妙的网格
+    ctx.strokeStyle = 'rgba(255,255,255,0.02)';
+    ctx.lineWidth = 1;
+    const gridSize = 50;
+    for (let x = 0; x < W; x += gridSize) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, H);
+        ctx.stroke();
+    }
+    for (let y = 0; y < H; y += gridSize) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(W, y);
+        ctx.stroke();
+    }
+}
+
+// ========== 动画循环 ==========
+let time = 0;
+function animate() {
+    time++;
+    drawBackground();
+
+    // 更新
+    blobs.forEach(b => b.update(time));
+
+    // 物理相互作用
+    for (let i = 0; i < blobs.length; i++) {
+        for (let j = i + 1; j < blobs.length; j++) {
+            const a = blobs[i];
+            const b = blobs[j];
+            const dx = b.x - a.x;
+            const dy = b.y - a.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            const minDist = a.radius + b.radius;
+
+            // 排斥力（防止重叠）
+            if (dist < minDist && dist > 0) {
+                const force = (minDist - dist) / minDist * 0.3;
+                const nx = dx / dist;
+                const ny = dy / dist;
+                a.vx -= nx * force;
+                a.vy -= ny * force;
+                b.vx += nx * force;
+                b.vy += ny * force;
+            }
+
+            // 吸引力（粘液特性）
+            if (dist < minDist + 80 && dist > minDist * 0.8) {
+                const pull = 0.01;
+                a.vx += dx / dist * pull;
+                a.vy += dy / dist * pull;
+                b.vx -= dx / dist * pull;
+                b.vy -= dy / dist * pull;
+            }
+        }
+    }
+
+    // 绘制连接桥（先于主体）
+    for (let i = 0; i < blobs.length; i++) {
+        for (let j = i + 1; j < blobs.length; j++) {
+            const dist = Math.hypot(blobs[i].x - blobs[j].x, blobs[i].y - blobs[j].y);
+            if (dist < blobs[i].radius + blobs[j].radius + 60) {
+                drawConnection(blobs[i], blobs[j], 1);
+            }
+        }
+    }
+
+    // 绘制拖拽效果
+    blobs.forEach(b => drawDragTrail(b));
+
+    // 绘制主体
+    blobs.forEach(b => b.draw());
+
+    requestAnimationFrame(animate);
+}
+
+animate();
+</script>
+</body>
+</html>

@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>星球吞噬</title>
+    <style>
+        * { margin: 0; padding: 0; }
+        body { overflow: hidden; background: #000; }
+        canvas { display: block; }
+        #hud {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            color: #fff;
+            font: 16px 'Courier New', monospace;
+            z-index: 10;
+            text-shadow: 0 0 10px rgba(100,200,255,0.8);
+        }
+        #hud div { margin: 8px 0; }
+        #gameOver {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: #fff;
+            z-index: 20;
+        }
+        #gameOver h1 {
+            font: bold 48px 'Courier New', monospace;
+            margin-bottom: 20px;
+            text-shadow: 0 0 30px #ff4444;
+        }
+        #gameOver p {
+            font: 20px 'Courier New', monospace;
+            margin: 10px 0;
+            color: rgba(255,255,255,0.7);
+        }
+        #restartBtn {
+            margin-top: 30px;
+            padding: 15px 40px;
+            font: 20px 'Courier New', monospace;
+            background: rgba(100,200,255,0.2);
+            border: 2px solid rgba(100,200,255,0.5);
+            color: #64c8ff;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        #restartBtn:hover {
+            background: rgba(100,200,255,0.4);
+            box-shadow: 0 0 30px rgba(100,200,255,0.5);
+        }
+        #startScreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: radial-gradient(ellipse at center, #0a1628 0%, #000 100%);
+            z-index: 30;
+        }
+        #startScreen h1 {
+            font: bold 60px 'Courier New', monospace;
+            color: #fff;
+            text-shadow: 0 0 40px #4488ff;
+            margin-bottom: 20px;
+        }
+        #startScreen p {
+            font: 18px 'Courier New', monospace;
+            color: rgba(255,255,255,0.5);
+            margin: 8px 0;
+        }
+        #startBtn {
+            margin-top: 40px;
+            padding: 20px 60px;
+            font: 24px 'Courier New', monospace;
+            background: rgba(68,136,255,0.3);
+            border: 2px solid rgba(68,136,255,0.6);
+            color: #4488ff;
+            cursor: pointer;
+            transition: all 0.3s;
+            animation: pulse 2s infinite;
+        }
+        #startBtn:hover {
+            background: rgba(68,136,255,0.5);
+            box-shadow: 0 0 40px rgba(68,136,255,0.6);
+        }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+    </style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="hud">
+    <div>体积: <span id="sizeDisplay">20</span></div>
+    <div>吞噬: <span id="killDisplay">0</span></div>
+    <div>最高: <span id="bestDisplay">0</span></div>
+</div>
+
+<div id="gameOver">
+    <h1>游戏结束</h1>
+    <p>你被吞噬了...</p>
+    <p>最终体积: <span id="finalSize">0</span></p>
+    <p>吞噬数量: <span id="finalKills">0</span></p>
+    <button id="restartBtn">再来一次</button>
+</div>
+
+<div id="startScreen">
+    <h1>星球吞噬</h1>
+    <p>吞噬比你小的星球</p>
+    <p>躲避比你大的星球</p>
+    <p>生存越久，变得越大</p>
+    <button id="startBtn">开始游戏</button>
+</div>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+let W, H;
+
+function resize() {
+    W = canvas.width = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+}
+resize();
+window.addEventListener('resize', resize);
+
+// 游戏状态
+let gameRunning = false;
+let score = 0;
+let kills = 0;
+let bestScore = 0;
+let mouseX = W / 2, mouseY = H / 2;
+
+// ========== 星球类 ==========
+class Planet {
+    constructor(x, y, radius, isPlayer = false) {
+        this.x = x;
+        this.y = y;
+        this.radius = radius;
+        this.isPlayer = isPlayer;
+        this.vx = (Math.random() - 0.5) * 2;
+        this.vy = (Math.random() - 0.5) * 2;
+        this.targetRadius = radius;
+        this.alive = true;
+        this.phase = Math.random() * Math.PI * 2;
+
+        // 颜色
+        if (isPlayer) {
+            this.hue = 200 + Math.random() * 40;
+            this.saturation = 80;
+            this.lightness = 60;
+        } else {
+            this.hue = Math.random() * 360;
+            this.saturation = 60 + Math.random() * 30;
+            this.lightness = 45 + Math.random() * 20;
+        }
+
+        // 粒子拖尾
+        this.trail = [];
+        this.trailTimer = 0;
+    }
+
+    update() {
+        // 平滑缩放
+        this.radius += (this.targetRadius - this.radius) * 0.1;
+
+        // 脉动
+        this.phase += 0.05;
+        const pulse = Math.sin(this.phase) * this.radius * 0.03;
+
+        if (this.isPlayer) {
+            // 玩家跟随鼠标
+            const dx = mouseX - this.x;
+            const dy = mouseY - this.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+
+            if (dist > 1) {
+                const speed = Math.min(dist * 0.15, 15);
+                this.vx += (dx / dist * speed - this.vx) * 0.2;
+                this.vy += (dy / dist * speed - this.vy) * 0.2;
+            }
+        } else {
+            // AI移动 - 朝玩家或远离玩家
+            if (gameRunning) {
+                const dx = player.x - this.x;
+                const dy = player.y - this.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+
+                if (this.radius < player.radius) {
+                    // 小于玩家 - 逃跑
+                    if (dist < 300) {
+                        this.vx -= (dx / dist) * 0.3;
+                        this.vy -= (dy / dist) * 0.3;
+                    }
+                } else {
+                    // 大于玩家 - 追击
+                    if (dist < 500) {
+                        this.vx += (dx / dist) * 0.2;
+                        this.vy += (dy / dist) * 0.2;
+                    }
+                }
+            }
+
+            // 边界反弹
+            const margin = this.radius + 50;
+            if (this.x < margin) this.vx += 0.2;
+            if (this.x > W - margin) this.vx -= 0.2;
+            if (this.y < margin) this.vy += 0.2;
+            if (this.y > H - margin) this.vy -= 0.2;
+
+            // 随机漂移
+            this.vx += (Math.random() - 0.5) * 0.1;
+            this.vy += (Math.random() - 0.5) * 0.1;
+        }
+
+        // 阻力
+        this.vx *= 0.92;
+        this.vy *= 0.92;
+
+        this.x += this.vx;
+        this.y += this.vy;
+
+        // 生成拖尾粒子
+        this.trailTimer++;
+        const speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
+        if (this.trailTimer % 2 === 0 && speed > 0.5) {
+            this.trail.push({
+                x: this.x + (Math.random() - 0.5) * this.radius * 0.5,
+                y: this.y + (Math.random() - 0.5) * this.radius * 0.5,
+                radius: 2 + Math.random() * 3,
+                alpha: 0.6,
+                hue: this.hue
+            });
+        }
+
+        // 更新拖尾
+        for (let i = this.trail.length - 1; i >= 0; i--) {
+            const t = this.trail[i];
+            t.alpha -= 0.02;
+            t.radius *= 0.98;
+            if (t.alpha <= 0) this.trail.splice(i, 1);
+        }
+
+        // 限制拖尾数量
+        if (this.trail.length > 30) this.trail.splice(0, this.trail.length - 30);
+    }
+
+    draw() {
+        // 绘制拖尾
+        this.trail.forEach(t => {
+            ctx.save();
+            ctx.globalAlpha = t.alpha;
+            ctx.fillStyle = `hsla(${t.hue}, ${this.saturation}%, ${this.lightness}%, 0.5)`;
+            ctx.shadowColor = `hsla(${t.hue}, 80%, 60%, 0.8)`;
+            ctx.shadowBlur = 10;
+            ctx.beginPath();
+            ctx.arc(t.x, t.y, t.radius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        });
+
+        const pulse = Math.sin(this.phase) * this.radius * 0.05;
+        const drawRadius = this.radius + pulse;
+
+        // 外层光晕
+        ctx.save();
+        ctx.globalAlpha = 0.3;
+        const glow = ctx.createRadialGradient(this.x, this.y, drawRadius * 0.5, this.x, this.y, drawRadius * 2);
+        glow.addColorStop(0, `hsla(${this.hue}, ${this.saturation}%, ${this.lightness}%, 0.4)`);
+        glow.addColorStop(1, 'transparent');
+        ctx.fillStyle = glow;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, drawRadius * 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+
+        // 主体
+        ctx.save();
+        const mainGrad = ctx.createRadialGradient(
+            this.x - drawRadius * 0.3, this.y - drawRadius * 0.3, 0,
+            this.x, this.y, drawRadius
+        );
+        mainGrad.addColorStop(0, `hsla(${this.hue}, ${this.saturation}%, ${Math.min(90, this.lightness + 20)}%, 1)`);
+        mainGrad.addColorStop(0.4, `hsla(${this.hue}, ${this.saturation}%, ${this.lightness}%, 1)`);
+        mainGrad.addColorStop(1, `hsla(${this.hue}, ${this.saturation}%, ${Math.max(10, this.lightness - 20)}%, 1)`);
+
+        ctx.shadowColor = `hsla(${this.hue}, 80%, 60%, 0.8)`;
+        ctx.shadowBlur = 30;
+        ctx.fillStyle = mainGrad;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, drawRadius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+
+        // 高光
+        ctx.save();
+        ctx.globalAlpha = 0.6;
+        const highlight = ctx.createRadialGradient(
+            this.x - drawRadius * 0.3, this.y - drawRadius * 0.3, 0,
+            this.x - drawRadius * 0.3, this.y - drawRadius * 0.3, drawRadius * 0.5
+        );
+        highlight.addColorStop(0, 'rgba(255,255,255,0.8)');
+        highlight.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = highlight;
+        ctx.beginPath();
+        ctx.arc(this.x - drawRadius * 0.3, this.y - drawRadius * 0.3, drawRadius * 0.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
+}
+
+// ========== 吞噬效果粒子 ==========
+let eatParticles = [];
+
+class EatParticle {
+    constructor(x, y, hue, radius) {
+        this.x = x;
+        this.y = y;
+        this.hue = hue;
+        this.radius = radius;
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 2 + Math.random() * 4;
+        this.vx = Math.cos(angle) * speed;
+        this.vy = Math.sin(angle) * speed;
+        this.alpha = 1;
+        this.size = 3 + Math.random() * 5;
+    }
+
+    update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        this.vx *= 0.95;
+        this.vy *= 0.95;
+        this.alpha -= 0.02;
+        this.size *= 0.98;
+    }
+
+    draw() {
+        if (this.alpha <= 0) return;
+        ctx.save();
+        ctx.globalAlpha = this.alpha;
+        ctx.fillStyle = `hsla(${this.hue}, 80%, 60%, 0.8)`;
+        ctx.shadowColor = `hsla(${this.hue}, 80%, 60%, 1)`;
+        ctx.shadowBlur = 15;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
+}
+
+// ========== 游戏对象 ==========
+let player;
+let planets = [];
+
+function initGame() {
+    score = 20;
+    kills = 0;
+    document.body.style.cursor = 'none';
+    player = new Planet(W / 2, H / 2, 20, true);
+
+    planets = [];
+    // 生成初始星体
+    for (let i = 0; i < 40; i++) {
+        spawnPlanet();
+    }
+
+    gameRunning = true;
+    document.getElementById('gameOver').style.display = 'none';
+    updateHUD();
+}
+
+function spawnPlanet() {
+    const x = Math.random() * W;
+    const y = Math.random() * H;
+    const radius = 8 + Math.random() * 25;
+    planets.push(new Planet(x, y, radius));
+}
+
+function updateHUD() {
+    document.getElementById('sizeDisplay').textContent = Math.floor(player.radius);
+    document.getElementById('killDisplay').textContent = kills;
+    document.getElementById('bestDisplay').textContent = bestScore;
+}
+
+// ========== 游戏主循环 ==========
+function gameLoop() {
+    if (!gameRunning) return;
+
+    // 清屏
+    ctx.fillStyle = 'rgba(5,10,25,0.3)';
+    ctx.fillRect(0, 0, W, H);
+
+    // 绘制星空背景
+    drawStars();
+
+    // 更新玩家
+    player.update();
+
+    // 更新星体
+    planets.forEach(p => p.update());
+
+    // 碰撞检测
+    for (let i = planets.length - 1; i >= 0; i--) {
+        const p = planets[i];
+        const dx = player.x - p.x;
+        const dy = player.y - p.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        if (dist < player.radius) {
+            // 玩家吞噬星体
+            if (p.radius < player.radius) {
+                // 吞噬效果
+                for (let j = 0; j < 10; j++) {
+                    eatParticles.push(new EatParticle(p.x, p.y, p.hue, p.radius));
+                }
+
+                player.targetRadius += p.radius * 0.3;
+                kills++;
+                planets.splice(i, 1);
+                spawnPlanet();
+            }
+            // 星体吞噬玩家
+            else if (p.radius > player.radius * 1.1 && dist < p.radius * 0.8) {
+                gameOver();
+                return;
+            }
+        }
+
+        // 星体之间碰撞
+        planets.forEach((other, j) => {
+            if (i === j) return;
+            const ddx = other.x - p.x;
+            const ddy = other.y - p.y;
+            const ddist = Math.sqrt(ddx * ddx + ddy * ddy);
+            const minDist = p.radius + other.radius;
+
+            if (ddist < minDist && ddist > 0) {
+                // 大的吞噬小的
+                if (p.radius > other.radius * 1.2) {
+                    p.targetRadius += other.radius * 0.2;
+                    planets.splice(j, 1);
+                    spawnPlanet();
+                }
+            }
+        });
+    }
+
+    // 绘制星体（按大小排序，小的先画）
+    planets.sort((a, b) => a.radius - b.radius);
+    planets.forEach(p => p.draw());
+
+    // 绘制玩家
+    player.draw();
+
+    // 更新吞噬粒子
+    for (let i = eatParticles.length - 1; i >= 0; i--) {
+        eatParticles[i].update();
+        if (eatParticles[i].alpha <= 0) {
+            eatParticles.splice(i, 1);
+        } else {
+            eatParticles[i].draw();
+        }
+    }
+
+    // 绘制引力线
+    drawGravityLines();
+
+    updateHUD();
+
+    requestAnimationFrame(gameLoop);
+}
+
+// ========== 引力线效果 ==========
+function drawGravityLines() {
+    planets.forEach(p => {
+        const dx = player.x - p.x;
+        const dy = player.y - p.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        if (dist < 200 && p.radius < player.radius) {
+            ctx.save();
+            ctx.globalAlpha = 0.2 * (1 - dist / 200);
+            ctx.strokeStyle = `hsla(${p.hue}, 70%, 60%, 0.5)`;
+            ctx.lineWidth = 1;
+            ctx.setLineDash([5, 10]);
+            ctx.beginPath();
+            ctx.moveTo(player.x, player.y);
+            ctx.lineTo(p.x, p.y);
+            ctx.stroke();
+            ctx.restore();
+        }
+    });
+}
+
+// ========== 星空背景 ==========
+const bgStars = [];
+for (let i = 0; i < 200; i++) {
+    bgStars.push({
+        x: Math.random() * 3000,
+        y: Math.random() * 2000,
+        size: Math.random() * 1.5,
+        twinkle: Math.random() * 0.03,
+        alpha: 0.3 + Math.random() * 0.5
+    });
+}
+
+function drawStars() {
+    bgStars.forEach(s => {
+        s.alpha += s.twinkle;
+        if (s.alpha > 0.8 || s.alpha < 0.2) s.twinkle = -s.twinkle;
+
+        ctx.save();
+        ctx.globalAlpha = s.alpha;
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.arc(s.x % W, s.y % H, s.size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    });
+}
+
+// ========== 游戏结束 ==========
+function gameOver() {
+    gameRunning = false;
+    if (kills > bestScore) bestScore = kills;
+
+    document.getElementById('gameOver').style.display = 'block';
+    document.getElementById('finalSize').textContent = Math.floor(player.radius);
+    document.getElementById('finalKills').textContent = kills;
+    document.body.style.cursor = 'default';
+}
+
+// ========== 事件监听 ==========
+canvas.addEventListener('mousemove', e => {
+    mouseX = e.clientX;
+    mouseY = e.clientY;
+});
+
+document.getElementById('startBtn').addEventListener('click', () => {
+    document.getElementById('startScreen').style.display = 'none';
+    initGame();
+    gameLoop();
+});
+
+document.getElementById('restartBtn').addEventListener('click', () => {
+    initGame();
+    gameLoop();
+});
+
+// 初始星空
+function drawInitialBg() {
+    ctx.fillStyle = '#050a19';
+    ctx.fillRect(0, 0, W, H);
+    drawStars();
+}
+drawInitialBg();
+</script>
+</body>
+</html>

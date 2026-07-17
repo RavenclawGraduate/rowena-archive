@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>星云</title>
+    <style>
+        * { margin: 0; padding: 0; }
+        body { overflow: hidden; background: #000; }
+        canvas { display: block; }
+        #info {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255,255,255,0.4);
+            font: 14px 'Courier New', monospace;
+            pointer-events: none;
+            letter-spacing: 2px;
+        }
+    </style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="info">DRAG TO EXPLORE THE UNIVERSE</div>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+let W, H;
+
+function resize() {
+    W = canvas.width = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+}
+resize();
+window.addEventListener('resize', resize);
+
+// 鼠标状态
+let mouseX = 0, mouseY = 0;
+let targetRotX = 0, targetRotY = 0;
+let rotX = 0, rotY = 0;
+let isDragging = false;
+let lastMouseX, lastMouseY;
+let autoRotate = true;
+
+// ========== 星云粒子 ==========
+class NebulaParticle {
+    constructor() {
+        this.reset();
+    }
+    reset() {
+        // 球面分布
+        const theta = Math.random() * Math.PI * 2;
+        const phi = Math.acos(2 * Math.random() - 1);
+        const r = 800 + Math.random() * 1200;
+
+        this.baseX = r * Math.sin(phi) * Math.cos(theta);
+        this.baseY = r * Math.sin(phi) * Math.sin(theta);
+        this.baseZ = r * Math.cos(phi);
+
+        this.size = Math.random() * 2 + 0.3;
+        this.brightness = Math.random();
+        this.twinkleSpeed = 0.005 + Math.random() * 0.02;
+        this.twinkleOffset = Math.random() * Math.PI * 2;
+
+        // 星云颜色
+        const colors = [
+            [180, 200, 255], // 蓝白
+            [255, 200, 180], // 暖橙
+            [200, 180, 255], // 淡紫
+            [180, 255, 220], // 青绿
+            [255, 255, 200], // 淡黄
+        ];
+        this.color = colors[Math.floor(Math.random() * colors.length)];
+    }
+    update(time) {
+        this.twinkle = Math.sin(time * this.twinkleSpeed + this.twinkleOffset) * 0.5 + 0.5;
+    }
+    project(rx, ry) {
+        // 绕X轴旋转
+        let y1 = this.baseY * Math.cos(rx) - this.baseZ * Math.sin(rx);
+        let z1 = this.baseY * Math.sin(rx) + this.baseZ * Math.cos(rx);
+        // 绕Y轴旋转
+        let x2 = this.baseX * Math.cos(ry) + z1 * Math.sin(ry);
+        let z2 = -this.baseX * Math.sin(ry) + z1 * Math.cos(ry);
+
+        const fov = 600;
+        const scale = fov / (fov + z2 + 1200);
+
+        return {
+            x: W / 2 + x2 * scale,
+            y: H / 2 + y1 * scale,
+            z: z2,
+            scale,
+            alpha: this.brightness * this.twinkle * Math.min(1, (z2 + 1200) / 800)
+        };
+    }
+}
+
+// ========== 星球 ==========
+class Planet {
+    constructor() {
+        const theta = Math.random() * Math.PI * 2;
+        const phi = Math.acos(2 * Math.random() - 1);
+        const r = 600 + Math.random() * 800;
+
+        this.baseX = r * Math.sin(phi) * Math.cos(theta);
+        this.baseY = r * Math.sin(phi) * Math.sin(theta);
+        this.baseZ = r * Math.cos(phi);
+
+        this.radius = 15 + Math.random() * 40;
+        this.ringProb = Math.random();
+
+        // 行星颜色
+        const planetColors = [
+            { base: '#4a7c9b', glow: 'rgba(74,124,155,0.3)' },   // 冰蓝
+            { base: '#c97b4b', glow: 'rgba(201,123,75,0.3)' },   // 土橙
+            { base: '#8b5a8b', glow: 'rgba(139,90,139,0.3)' },   // 星紫
+            { base: '#5a8b5a', glow: 'rgba(90,139,90,0.3)' },    // 翠绿
+            { base: '#9b6b6b', glow: 'rgba(155,107,107,0.3)' },  // 暗红
+            { base: '#7b8b9b', glow: 'rgba(123,139,155,0.3)' },  // 灰蓝
+        ];
+        const c = planetColors[Math.floor(Math.random() * planetColors.length)];
+        this.baseColor = c.base;
+        this.glowColor = c.glow;
+
+        this.rotation = Math.random() * Math.PI * 2;
+        this.rotSpeed = (Math.random() - 0.5) * 0.005;
+    }
+    project(rx, ry) {
+        let y1 = this.baseY * Math.cos(rx) - this.baseZ * Math.sin(rx);
+        let z1 = this.baseY * Math.sin(rx) + this.baseZ * Math.cos(rx);
+        let x2 = this.baseX * Math.cos(ry) + z1 * Math.sin(ry);
+        let z2 = -this.baseX * Math.sin(ry) + z1 * Math.cos(ry);
+
+        const fov = 600;
+        const scale = fov / (fov + z2 + 1200);
+
+        return {
+            x: W / 2 + x2 * scale,
+            y: H / 2 + y1 * scale,
+            z: z2,
+            scale,
+            r: this.radius * scale
+        };
+    }
+}
+
+// ========== 流星 ==========
+class Meteor {
+    constructor() { this.reset(); }
+    reset() {
+        this.x = (Math.random() - 0.5) * W * 2;
+        this.y = (Math.random() - 0.5) * H * 1.5 - H * 0.3;
+        this.z = -200 - Math.random() * 400;
+        this.vx = (Math.random() - 0.3) * 15;
+        this.vy = 5 + Math.random() * 10;
+        this.life = 1;
+        this.decay = 0.008 + Math.random() * 0.015;
+        this.len = 30 + Math.random() * 60;
+        this.thickness = 1 + Math.random() * 2;
+    }
+    update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        this.life -= this.decay;
+        if (this.life <= 0) this.reset();
+    }
+}
+
+// ========== 初始化 ==========
+const stars = Array.from({ length: 2500 }, () => new NebulaParticle());
+const planets = Array.from({ length: 12 }, () => new Planet());
+const meteors = Array.from({ length: 3 }, () => new Meteor());
+
+// 星云气体云
+const nebulaClouds = [];
+for (let i = 0; i < 5; i++) {
+    const theta = Math.random() * Math.PI * 2;
+    const phi = Math.acos(2 * Math.random() - 1);
+    const r = 500 + Math.random() * 600;
+    nebulaClouds.push({
+        x: r * Math.sin(phi) * Math.cos(theta),
+        y: r * Math.sin(phi) * Math.sin(theta),
+        z: r * Math.cos(phi),
+        radius: 200 + Math.random() * 300,
+        color: [
+            'rgba(60,80,160,0.02)',
+            'rgba(120,60,140,0.02)',
+            'rgba(40,120,120,0.015)',
+            'rgba(160,80,60,0.015)',
+        ][Math.floor(Math.random() * 4)]
+    });
+}
+
+// ========== 鼠标事件 ==========
+canvas.addEventListener('mousedown', e => {
+    isDragging = true;
+    autoRotate = false;
+    lastMouseX = e.clientX;
+    lastMouseY = e.clientY;
+});
+
+canvas.addEventListener('mousemove', e => {
+    if (isDragging) {
+        const dx = e.clientX - lastMouseX;
+        const dy = e.clientY - lastMouseY;
+        targetRotY += dx * 0.003;
+        targetRotX += dy * 0.003;
+        lastMouseX = e.clientX;
+        lastMouseY = e.clientY;
+    }
+    mouseX = e.clientX;
+    mouseY = e.clientY;
+});
+
+canvas.addEventListener('mouseup', () => {
+    isDragging = false;
+    setTimeout(() => { autoRotate = true; }, 2000);
+});
+
+canvas.addEventListener('mouseleave', () => {
+    isDragging = false;
+});
+
+// 触摸支持
+canvas.addEventListener('touchstart', e => {
+    isDragging = true;
+    autoRotate = false;
+    lastMouseX = e.touches[0].clientX;
+    lastMouseY = e.touches[0].clientY;
+});
+canvas.addEventListener('touchmove', e => {
+    e.preventDefault();
+    if (isDragging) {
+        const dx = e.touches[0].clientX - lastMouseX;
+        const dy = e.touches[0].clientY - lastMouseY;
+        targetRotY += dx * 0.003;
+        targetRotX += dy * 0.003;
+        lastMouseX = e.touches[0].clientX;
+        lastMouseY = e.touches[0].clientY;
+    }
+});
+canvas.addEventListener('touchend', () => {
+    isDragging = false;
+    setTimeout(() => { autoRotate = true; }, 2000);
+});
+
+// ========== 渲染 ==========
+let time = 0;
+
+function drawBackground() {
+    const grad = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, Math.max(W, H) * 0.7);
+    grad.addColorStop(0, '#0a0a1a');
+    grad.addColorStop(0.5, '#050510');
+    grad.addColorStop(1, '#000005');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, H);
+}
+
+function drawNebulaCloud(rx, ry, cloud) {
+    let y1 = cloud.y * Math.cos(rx) - cloud.z * Math.sin(rx);
+    let z1 = cloud.y * Math.sin(rx) + cloud.z * Math.cos(rx);
+    let x2 = cloud.x * Math.cos(ry) + z1 * Math.sin(ry);
+    let z2 = -cloud.x * Math.sin(ry) + z1 * Math.cos(ry);
+
+    const fov = 600;
+    const scale = fov / (fov + z2 + 1200);
+    const sx = W / 2 + x2 * scale;
+    const sy = H / 2 + y1 * scale;
+    const sr = cloud.radius * scale;
+
+    const grad = ctx.createRadialGradient(sx, sy, 0, sx, sy, sr);
+    grad.addColorStop(0, cloud.color);
+    grad.addColorStop(1, 'transparent');
+    ctx.fillStyle = grad;
+    ctx.fillRect(sx - sr, sy - sr, sr * 2, sr * 2);
+}
+
+function drawPlanet(planet, rx, ry) {
+    const p = planet.project(rx, ry);
+    if (p.z < -1000 || p.r < 1) return;
+
+    const alpha = Math.min(1, (p.z + 1200) / 800);
+    ctx.save();
+    ctx.globalAlpha = alpha;
+
+    // 光晕
+    const glow = ctx.createRadialGradient(p.x, p.y, p.r * 0.8, p.x, p.y, p.r * 2.5);
+    glow.addColorStop(0, planet.glowColor);
+    glow.addColorStop(1, 'transparent');
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r * 2.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 星球本体
+    const grad = ctx.createRadialGradient(p.x - p.r * 0.3, p.y - p.r * 0.3, 0, p.x, p.y, p.r);
+    grad.addColorStop(0, '#ffffff');
+    grad.addColorStop(0.2, planet.baseColor);
+    grad.addColorStop(1, '#000000');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 星环
+    if (planet.ringProb > 0.6) {
+        ctx.strokeStyle = `rgba(200,200,220,${0.3 * alpha})`;
+        ctx.lineWidth = p.r * 0.15;
+        ctx.beginPath();
+        ctx.ellipse(p.x, p.y, p.r * 1.8, p.r * 0.4, 0.3, 0, Math.PI * 2);
+        ctx.stroke();
+    }
+
+    ctx.restore();
+}
+
+function drawMeteor(meteor) {
+    const fov = 600;
+    const scale = fov / (fov + meteor.z + 1200);
+    const sx = W / 2 + meteor.x * scale;
+    const sy = H / 2 + meteor.y * scale;
+    const len = meteor.len * scale;
+
+    const dx = meteor.vx;
+    const dy = meteor.vy;
+    const d = Math.sqrt(dx * dx + dy * dy);
+
+    ctx.save();
+    ctx.globalAlpha = meteor.life;
+    const grad = ctx.createLinearGradient(
+        sx, sy,
+        sx - (dx / d) * len,
+        sy - (dy / d) * len
+    );
+    grad.addColorStop(0, 'rgba(255,255,255,1)');
+    grad.addColorStop(0.3, 'rgba(180,220,255,0.6)');
+    grad.addColorStop(1, 'rgba(100,150,255,0)');
+    ctx.strokeStyle = grad;
+    ctx.lineWidth = meteor.thickness * scale;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(sx, sy);
+    ctx.lineTo(sx - (dx / d) * len, sy - (dy / d) * len);
+    ctx.stroke();
+
+    // 流星头亮点
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(sx, sy, meteor.thickness * scale * 1.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+}
+
+function render() {
+    time++;
+
+    if (autoRotate) {
+        targetRotY += 0.001;
+        targetRotX += 0.0002;
+    }
+
+    rotX += (targetRotX - rotX) * 0.05;
+    rotY += (targetRotY - rotY) * 0.05;
+
+    drawBackground();
+
+    // 星云气体云
+    nebulaClouds.forEach(c => drawNebulaCloud(rotX, rotY, c));
+
+    // 收集所有可排序对象
+    const renderQueue = [];
+
+    // 星星
+    stars.forEach(s => {
+        s.update(time);
+        const p = s.project(rotX, rotY);
+        if (p.alpha > 0.02) {
+            renderQueue.push({
+                type: 'star',
+                data: s,
+                proj: p,
+                z: p.z
+            });
+        }
+    });
+
+    // 星球
+    planets.forEach(p => {
+        const proj = p.project(rotX, rotY);
+        renderQueue.push({
+            type: 'planet',
+            data: p,
+            proj: proj,
+            z: proj.z
+        });
+    });
+
+    // 按z排序（远的先画）
+    renderQueue.sort((a, b) => a.z - b.z);
+
+    // 绘制
+    renderQueue.forEach(item => {
+        if (item.type === 'star') {
+            const s = item.data;
+            const p = item.proj;
+            ctx.save();
+            ctx.globalAlpha = p.alpha;
+            ctx.fillStyle = `rgb(${s.color[0]},${s.color[1]},${s.color[2]})`;
+            ctx.shadowColor = `rgb(${s.color[0]},${s.color[1]},${s.color[2]})`;
+            ctx.shadowBlur = s.size * 3;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, s.size * p.scale, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        } else if (item.type === 'planet') {
+            drawPlanet(item.data, rotX, rotY);
+        }
+    });
+
+    // 流星
+    meteors.forEach(m => {
+        m.update();
+        if (m.life > 0) drawMeteor(m);
+    });
+
+    // 鼠标附近的星光增强
+    const mouseGrad = ctx.createRadialGradient(mouseX, mouseY, 0, mouseX, mouseY, 150);
+    mouseGrad.addColorStop(0, 'rgba(100,150,255,0.03)');
+    mouseGrad.addColorStop(1, 'transparent');
+    ctx.fillStyle = mouseGrad;
+    ctx.fillRect(0, 0, W, H);
+
+    requestAnimationFrame(render);
+}
+
+render();
+</script>
+</body>
+</html>

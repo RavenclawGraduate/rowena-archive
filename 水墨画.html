@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>水墨晕染</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=ZCOOL+KuaiLe&display=swap');
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            overflow: hidden;
+            background: #f5f0e8;
+            font-family: 'Ma Shan Zheng', serif;
+            cursor: none;
+        }
+        #canvas {
+            display: block;
+            position: fixed;
+            top: 0;
+            left: 0;
+        }
+        #ui {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .brush-btn {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            border: 2px solid #5a4a3a;
+            background: #f5f0e8;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            font-family: 'Ma Shan Zheng', 'STKaiti', 'KaiTi', serif;
+        }
+        .brush-btn:hover { transform: scale(1.1); }
+        .brush-btn.active {
+            background: #2a2218;
+            border-color: #2a2218;
+        }
+        .brush-btn.active span { color: #f5f0e8; }
+        #inkColor {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 10;
+            display: flex;
+            gap: 10px;
+        }
+        .color-dot {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            border: 2px solid #5a4a3a;
+            cursor: pointer;
+            transition: transform 0.3s;
+        }
+        .color-dot:hover { transform: scale(1.2); }
+        .color-dot.active { border: 3px solid #8b4513; box-shadow: 0 0 8px rgba(0,0,0,0.3); }
+        #title {
+            position: fixed;
+            bottom: 30px;
+            right: 40px;
+            font-size: 32px;
+            color: #3a3228;
+            opacity: 0.6;
+            writing-mode: vertical-rl;
+            letter-spacing: 8px;
+            pointer-events: none;
+        }
+        #clearBtn {
+            position: fixed;
+            bottom: 30px;
+            left: 20px;
+            z-index: 10;
+            background: none;
+            border: 1px solid #8b7355;
+            color: #5a4a3a;
+            padding: 8px 16px;
+            font-family: 'Ma Shan Zheng', serif;
+            font-size: 16px;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: all 0.3s;
+        }
+        #clearBtn:hover { background: #5a4a3a; color: #f5f0e8; }
+        #brushSize {
+            position: fixed;
+            top: 50%;
+            right: 20px;
+            transform: translateY(-50%);
+            z-index: 10;
+            width: 40px;
+            height: 200px;
+            -webkit-appearance: none;
+            background: transparent;
+        }
+        #brushSize::-webkit-slider-runnable-track {
+            width: 6px;
+            height: 100%;
+            background: linear-gradient(to bottom, #d4c5a9, #3a3228);
+            border-radius: 3px;
+        }
+        #brushSize::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #3a3228;
+            margin-left: -7px;
+            cursor: pointer;
+            border: 2px solid #f5f0e8;
+        }
+        #hint {
+            position: fixed;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #8b7355;
+            font-size: 18px;
+            opacity: 0.7;
+            pointer-events: none;
+            animation: fadeHint 3s forwards;
+        }
+        @keyframes fadeHint {
+            0%, 70% { opacity: 0.7; }
+            100% { opacity: 0; }
+        }
+        /* 宣纸纹理覆盖 */
+        #texture {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            opacity: 0.08;
+            background-image: 
+                repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(139,115,85,0.1) 2px, transparent 4px),
+                repeating-linear-gradient(90deg, transparent, transparent 2px, rgba(139,115,85,0.1) 2px, transparent 4px);
+            z-index: 5;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+    <div id="texture"></div>
+
+    <div id="ui">
+        <button class="brush-btn active" data-mode="ink" title="水墨"><span>墨</span></button>
+        <button class="brush-btn" data-mode="brush" title="毛笔"><span>笔</span></button>
+        <button class="brush-btn" data-mode="splash" title="泼墨"><span>泼</span></button>
+        <button class="brush-btn" data-mode="dry" title="枯笔"><span>枯</span></button>
+    </div>
+
+    <div id="inkColor">
+        <div class="color-dot active" style="background:#1a1a1a" data-color="#1a1a1a"></div>
+        <div class="color-dot" style="background:#3d2b1f" data-color="#3d2b1f"></div>
+        <div class="color-dot" style="background:#8b0000" data-color="#8b0000"></div>
+        <div class="color-dot" style="background:#006400" data-color="#006400"></div>
+        <div class="color-dot" style="background:#191970" data-color="#191970"></div>
+    </div>
+
+    <input type="range" id="brushSize" min="2" max="60" value="16" orient="vertical">
+
+    <div id="title">水墨丹青</div>
+    <button id="clearBtn">清纸</button>
+    <div id="hint">请用鼠标挥毫泼墨</div>
+
+    <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    let W, H;
+
+    function resize() {
+        const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        W = canvas.width = window.innerWidth;
+        H = canvas.height = window.innerHeight;
+        ctx.fillStyle = '#f5f0e8';
+        ctx.fillRect(0, 0, W, H);
+        ctx.putImageData(imgData, 0, 0);
+    }
+    resize();
+    window.addEventListener('resize', resize);
+
+    // 状态
+    let isDrawing = false;
+    let lastX, lastY;
+    let currentColor = '#1a1a1a';
+    let currentMode = 'ink';
+    let brushRadius = 16;
+    let inkDrops = [];
+
+    // 水墨扩散粒子
+    class InkDrop {
+        constructor(x, y, color, radius, opacity) {
+            this.x = x;
+            this.y = y;
+            this.color = color;
+            this.radius = radius;
+            this.opacity = opacity;
+            this.maxRadius = radius * (2 + Math.random() * 3);
+            this.life = 1;
+            this.decay = 0.008 + Math.random() * 0.012;
+            this.growing = true;
+            this.vx = (Math.random() - 0.5) * 0.5;
+            this.vy = (Math.random() - 0.5) * 0.5;
+            this.wobble = Math.random() * Math.PI * 2;
+            this.wobbleSpeed = 0.02 + Math.random() * 0.03;
+        }
+
+        update() {
+            this.life -= this.decay;
+            this.wobble += this.wobbleSpeed;
+
+            if (this.growing) {
+                this.radius += (this.maxRadius - this.radius) * 0.03;
+                if (this.radius >= this.maxRadius * 0.95) this.growing = false;
+            }
+
+            // 墨色自然扩散的随机游走
+            this.x += this.vx + Math.sin(this.wobble) * 0.3;
+            this.y += this.vy + Math.cos(this.wobble) * 0.3;
+            this.vx *= 0.98;
+            this.vy *= 0.98;
+
+            return this.life > 0;
+        }
+
+        draw() {
+            if (this.life <= 0 || this.radius < 0.5) return;
+
+            ctx.save();
+            ctx.globalAlpha = this.life * this.opacity * 0.15;
+
+            // 多层渐变模拟墨色渗透
+            const grad = ctx.createRadialGradient(
+                this.x, this.y, 0,
+                this.x, this.y, this.radius
+            );
+
+            // 解析颜色
+            const rgb = hexToRgb(this.color);
+            grad.addColorStop(0, `rgba(${rgb.r},${rgb.g},${rgb.b},${this.life * 0.6})`);
+            grad.addColorStop(0.3, `rgba(${rgb.r},${rgb.g},${rgb.b},${this.life * 0.3})`);
+            grad.addColorStop(0.6, `rgba(${rgb.r},${rgb.g},${rgb.b},${this.life * 0.1})`);
+            grad.addColorStop(1, `rgba(${rgb.r},${rgb.g},${rgb.b},0)`);
+
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+
+            // 不规则边缘（模拟宣纸吸墨）
+            const points = 12;
+            for (let i = 0; i <= points; i++) {
+                const angle = (Math.PI * 2 / points) * i;
+                const wobbleR = this.radius * (0.85 + Math.sin(this.wobble + i) * 0.15);
+                const px = this.x + Math.cos(angle) * wobbleR;
+                const py = this.y + Math.sin(angle) * wobbleR;
+                if (i === 0) ctx.moveTo(px, py);
+                else ctx.lineTo(px, py);
+            }
+            ctx.closePath();
+            ctx.fill();
+            ctx.restore();
+        }
+    }
+
+    function hexToRgb(hex) {
+        const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+        return result ? {
+            r: parseInt(result[1], 16),
+            g: parseInt(result[2], 16),
+            b: parseInt(result[3], 16)
+        } : { r: 26, g: 26, b: 26 };
+    }
+
+    // 绘制水墨笔触
+    function drawInkStroke(x, y) {
+        const dist = Math.hypot(x - lastX, y - lastY);
+        const steps = Math.max(1, Math.floor(dist / 3));
+
+        for (let i = 0; i < steps; i++) {
+            const t = i / steps;
+            const px = lastX + (x - lastX) * t;
+            const py = lastY + (y - lastY) * t;
+
+            // 核心浓墨
+            ctx.save();
+            ctx.globalAlpha = 0.4 + Math.random() * 0.2;
+            ctx.fillStyle = currentColor;
+            ctx.beginPath();
+            ctx.arc(px, py, brushRadius * 0.3, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+
+            // 晕染扩散粒子
+            if (Math.random() > 0.4) {
+                const drop = new InkDrop(
+                    px + (Math.random() - 0.5) * brushRadius,
+                    py + (Math.random() - 0.5) * brushRadius,
+                    currentColor,
+                    brushRadius * (0.5 + Math.random() * 0.5),
+                    0.5 + Math.random() * 0.5
+                );
+                inkDrops.push(drop);
+            }
+
+            // 边缘飞白效果
+            if (Math.random() > 0.7) {
+                ctx.save();
+                ctx.globalAlpha = 0.05 + Math.random() * 0.1;
+                ctx.fillStyle = currentColor;
+                const splatterR = brushRadius * (1 + Math.random() * 1.5);
+                const angle = Math.random() * Math.PI * 2;
+                ctx.beginPath();
+                ctx.arc(
+                    px + Math.cos(angle) * splatterR,
+                    py + Math.sin(angle) * splatterR,
+                    1 + Math.random() * 2,
+                    0, Math.PI * 2
+                );
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+    }
+
+    // 毛笔模式 - 更浓更有力度
+    function drawBrushStroke(x, y) {
+        const dist = Math.hypot(x - lastX, y - lastY);
+        const speed = Math.min(dist, 50);
+        const pressure = 1 - speed / 50; // 速度越快笔触越细
+
+        ctx.save();
+        ctx.globalAlpha = 0.3;
+        ctx.strokeStyle = currentColor;
+        ctx.lineWidth = brushRadius * pressure;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.beginPath();
+        ctx.moveTo(lastX, lastY);
+        ctx.lineTo(x, y);
+        ctx.stroke();
+        ctx.restore();
+
+        // 墨色渗透
+        if (Math.random() > 0.5) {
+            inkDrops.push(new InkDrop(
+                x + (Math.random() - 0.5) * brushRadius * 0.5,
+                y + (Math.random() - 0.5) * brushRadius * 0.5,
+                currentColor,
+                brushRadius * pressure * 0.8,
+                0.6
+            ));
+        }
+    }
+
+    // 泼墨模式 - 大面积泼洒
+    function drawSplashStroke(x, y) {
+        // 大墨点
+        for (let i = 0; i < 3; i++) {
+            inkDrops.push(new InkDrop(
+                x + (Math.random() - 0.5) * brushRadius * 2,
+                y + (Math.random() - 0.5) * brushRadius * 2,
+                currentColor,
+                brushRadius * (1 + Math.random() * 2),
+                0.4 + Math.random() * 0.4
+            ));
+        }
+
+        // 飞溅的小墨点
+        for (let i = 0; i < 8; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const dist = brushRadius * (1 + Math.random() * 3);
+            ctx.save();
+            ctx.globalAlpha = 0.2 + Math.random() * 0.3;
+            ctx.fillStyle = currentColor;
+            ctx.beginPath();
+            ctx.arc(
+                x + Math.cos(angle) * dist,
+                y + Math.sin(angle) * dist,
+                1 + Math.random() * 4,
+                0, Math.PI * 2
+            );
+            ctx.fill();
+            ctx.restore();
+        }
+    }
+
+    // 枯笔模式 - 飞白效果
+    function drawDryStroke(x, y) {
+        const dist = Math.hypot(x - lastX, y - lastY);
+        const steps = Math.max(1, Math.floor(dist / 2));
+
+        for (let i = 0; i < steps; i++) {
+            const t = i / steps;
+            const px = lastX + (x - lastX) * t;
+            const py = lastY + (y - lastY) * t;
+
+            // 随机断续的笔触
+            if (Math.random() > 0.4) {
+                ctx.save();
+                ctx.globalAlpha = 0.15 + Math.random() * 0.25;
+                ctx.fillStyle = currentColor;
+                const size = brushRadius * (0.3 + Math.random() * 0.7);
+                ctx.beginPath();
+                // 不规则形状
+                ctx.ellipse(
+                    px + (Math.random() - 0.5) * brushRadius * 0.3,
+                    py + (Math.random() - 0.5) * brushRadius * 0.3,
+                    size,
+                    size * (0.3 + Math.random() * 0.7),
+                    Math.random() * Math.PI,
+                    0, Math.PI * 2
+                );
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+    }
+
+    // 自定义光标
+    const cursor = document.createElement('div');
+    cursor.style.cssText = `
+        position: fixed;
+        pointer-events: none;
+        z-index: 100;
+        border: 1.5px solid #3a3228;
+        border-radius: 50%;
+        transform: translate(-50%, -50%);
+        transition: width 0.2s, height 0.2s;
+        mix-blend-mode: difference;
+    `;
+    document.body.appendChild(cursor);
+
+    function updateCursorSize() {
+        cursor.style.width = brushRadius * 2 + 'px';
+        cursor.style.height = brushRadius * 2 + 'px';
+    }
+    updateCursorSize();
+
+    // 事件
+    canvas.addEventListener('mousedown', e => {
+        isDrawing = true;
+        lastX = e.clientX;
+        lastY = e.clientY;
+    });
+
+    canvas.addEventListener('mousemove', e => {
+        cursor.style.left = e.clientX + 'px';
+        cursor.style.top = e.clientY + 'px';
+
+        if (!isDrawing) return;
+
+        switch (currentMode) {
+            case 'ink': drawInkStroke(e.clientX, e.clientY); break;
+            case 'brush': drawBrushStroke(e.clientX, e.clientY); break;
+            case 'splash': drawSplashStroke(e.clientX, e.clientY); break;
+            case 'dry': drawDryStroke(e.clientX, e.clientY); break;
+        }
+
+        lastX = e.clientX;
+        lastY = e.clientY;
+    });
+
+    canvas.addEventListener('mouseup', () => { isDrawing = false; });
+    canvas.addEventListener('mouseleave', () => { isDrawing = false; });
+
+    // 笔刷模式选择
+    document.querySelectorAll('.brush-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.brush-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            currentMode = btn.dataset.mode;
+        });
+    });
+
+    // 颜色选择
+    document.querySelectorAll('.color-dot').forEach(dot => {
+        dot.addEventListener('click', () => {
+            document.querySelectorAll('.color-dot').forEach(d => d.classList.remove('active'));
+            dot.classList.add('active');
+            currentColor = dot.dataset.color;
+        });
+    });
+
+    // 笔刷大小
+    document.getElementById('brushSize').addEventListener('input', e => {
+        brushRadius = parseInt(e.target.value);
+        updateCursorSize();
+    });
+
+    // 清纸
+    document.getElementById('clearBtn').addEventListener('click', () => {
+        ctx.fillStyle = '#f5f0e8';
+        ctx.fillRect(0, 0, W, H);
+        inkDrops = [];
+    });
+
+    // 动画循环 - 更新墨色扩散
+    function animate() {
+        for (let i = inkDrops.length - 1; i >= 0; i--) {
+            if (!inkDrops[i].update()) {
+                inkDrops.splice(i, 1);
+            } else {
+                inkDrops[i].draw();
+            }
+        }
+        requestAnimationFrame(animate);
+    }
+    animate();
+
+    // 限制粒子数量防止卡顿
+    setInterval(() => {
+        if (inkDrops.length > 800) {
+            inkDrops.splice(0, inkDrops.length - 600);
+        }
+    }, 1000);
+    </script>
+</body>
+</html>
