@@ -1,12 +1,26 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
-<head>
+<html lang="zh-CN"><head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="description" content="Code Converter 编程语言转换器，浏览器本地运行代码互转工具，支持Python、JavaScript等多语言互相转换，明暗双主题，开源免费，代码不会上传服务器。">
-<meta name="keywords" content="编程语言转换器,代码转换工具,Python转JS,在线代码转换,本地代码转换器">
-<meta name="robots" content="index,follow">
 <title>编程语言转换器</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/codemirror.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/python/python.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/javascript/javascript.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/clike/clike.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/go/go.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/xml/xml.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/css/css.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/htmlmixed/htmlmixed.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/edit/matchbrackets.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/fold/foldcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/fold/foldgutter.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/fold/brace-fold.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/fold/indent-fold.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/fold/comment-fold.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/fold/xml-fold.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/selection/active-line.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/display/placeholder.min.js"></script>
 <style>
   :root {
     --bg: #0f0f1a;
@@ -42,6 +56,10 @@
     display: flex;
     flex-direction: column;
   }
+  body, body::before, .editor-panel, .toolbar, .editor-header, .status-bar,
+  select, .theme-toggle, .toast, .CodeMirror, .CodeMirror-gutters, .CodeMirror-linenumber {
+    transition: background-color 0.35s ease, border-color 0.35s ease, color 0.35s ease, box-shadow 0.35s ease;
+  }
   header {
     padding: 20px 32px;
     border-bottom: 1px solid var(--border);
@@ -72,9 +90,20 @@
     transition: 0.2s;
   }
   .theme-toggle:hover { border-color: var(--accent); background: var(--surface); }
-  .container { max-width: 1400px; margin: 0 auto; padding: 24px 32px; flex: 1; width: 100%; display: flex; flex-direction: column; min-height: 0; }
+  .container {
+    max-width: 1400px; margin: 0 auto; padding: 24px 32px;
+    flex: 1; width: 100%; display: flex; flex-direction: column; min-height: 0;
+  }
   .editor-grid-wrap { flex: 1; display: flex; flex-direction: column; min-height: 0; }
-  .editor-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; flex: 1; min-height: 0; grid-template-rows: 1fr; }
+  .editor-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 20px;
+    flex: 1; min-height: 0; grid-template-rows: 1fr;
+  }
+  @media (max-width: 900px) {
+    .editor-grid { grid-template-columns: 1fr; }
+    .container { padding: 16px; }
+    header { padding: 16px; }
+  }
   .toolbar {
     display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
     margin-bottom: 20px; padding: 16px; background: var(--surface);
@@ -110,11 +139,6 @@
   }
   .btn-success:hover { transform: translateY(-1px); }
   .btn-icon { padding: 8px 12px; font-size: 16px; }
-  @media (max-width: 900px) {
-    .editor-grid { grid-template-columns: 1fr; }
-    .container { padding: 16px; }
-    header { padding: 16px; }
-  }
   .editor-panel {
     background: var(--surface); border-radius: var(--radius);
     border: 1px solid var(--border); overflow: hidden;
@@ -130,12 +154,10 @@
   .editor-header .lang-label {
     font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px;
   }
-  .lang-dot {
-    width: 10px; height: 10px; border-radius: 50%; display: inline-block;
-  }
+  .lang-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
   .editor-meta { font-size: 12px; color: var(--text2); display: flex; gap: 12px; }
   .code-area {
-    position: relative; flex: 1; display: flex; flex-direction: column;
+    position: relative; flex: 1; display: flex; flex-direction: column; min-height: 0;
   }
   .code-area .CodeMirror {
     flex: 1; height: 100%; min-height: 420px;
@@ -155,16 +177,13 @@
     opacity: 0; transition: 0.3s; pointer-events: none; z-index: 100;
   }
   .toast.show { opacity: 1; }
-
   .spinner {
     display: inline-block; width: 16px; height: 16px;
     border: 2px solid var(--text2); border-top-color: var(--accent);
     border-radius: 50%; animation: spin 0.6s linear infinite;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
-  .examples {
-    display: flex; gap: 8px; flex-wrap: wrap;
-  }
+  .examples { display: flex; gap: 8px; flex-wrap: wrap; }
   .examples .chip {
     font-size: 12px; padding: 4px 12px; border-radius: 16px;
     background: var(--surface2); color: var(--text2); border: 1px solid var(--border);
@@ -172,25 +191,15 @@
   }
   .examples .chip:hover { border-color: var(--accent); color: var(--accent2); }
 
-  /* ---- 主题过渡 ---- */
-  body, body::before, .editor-panel, .toolbar, .editor-header, .status-bar,
-  select, .theme-toggle, .toast,
-  .CodeMirror, .CodeMirror-gutters, .CodeMirror-linenumber {
-    transition: background-color 0.35s ease, border-color 0.35s ease, color 0.35s ease, box-shadow 0.35s ease;
-  }
-
-  /* ---- CodeMirror 自定义主题 (适配明暗) ---- */
+  /* CodeMirror 暗色主题 */
   .CodeMirror {
     font-family: var(--font); font-size: 14px; line-height: 1.6;
-    height: auto; min-height: 400px;
     background: transparent; color: var(--text);
   }
   .CodeMirror-gutters {
     background: var(--surface); border-right: 1px solid var(--border);
   }
-  .CodeMirror-linenumber {
-    color: var(--text2) !important; opacity: 0.5;
-  }
+  .CodeMirror-linenumber { color: var(--text2) !important; opacity: 0.5; }
   .CodeMirror-cursor { border-left-color: var(--accent) !important; }
   .CodeMirror-selected { background: rgba(108,92,231,0.15) !important; }
   .CodeMirror-activeline-background { background: rgba(108,92,231,0.06) !important; }
@@ -199,12 +208,8 @@
     border-bottom: 1px solid var(--green) !important;
     color: var(--text) !important;
   }
-  .CodeMirror-foldmarker {
-    color: var(--text2); font-family: sans-serif; cursor: pointer;
-  }
-  .CodeMirror-foldgutter-open, .CodeMirror-foldgutter-closed {
-    cursor: pointer; color: var(--text2); opacity: 0.6;
-  }
+  .CodeMirror-foldmarker { color: var(--text2); font-family: sans-serif; cursor: pointer; }
+  .CodeMirror-foldgutter-open, .CodeMirror-foldgutter-closed { cursor: pointer; color: var(--text2); opacity: 0.6; }
   .cm-s-default .cm-keyword { color: #c792ea; }
   .cm-s-default .cm-atom { color: #f78c6c; }
   .cm-s-default .cm-number { color: #f78c6c; }
@@ -223,8 +228,9 @@
   .cm-s-default .cm-bracket { color: var(--text2); }
   .cm-s-default .cm-tag { color: #f07178; }
   .cm-s-default .cm-attribute { color: #c792ea; }
-  .cm-s-default .cm-hr { color: #999; }
-  .cm-s-default .cm-link { color: #80cbc4; }
+  .CodeMirror-placeholder { color: var(--text2) !important; opacity: 0.5 !important; }
+
+  /* 浅色主题 CodeMirror 覆盖 */
   body.light .cm-s-default .cm-comment { color: #90a4ae; }
   body.light .cm-s-default .cm-string { color: #6a8759; }
   body.light .cm-s-default .cm-number { color: #ab6526; }
@@ -237,12 +243,8 @@
   body.light .cm-s-default .cm-operator { color: #5f5f5f; }
   body.light .cm-s-default .cm-tag { color: #b52f2f; }
   body.light .cm-s-default .cm-attribute { color: #7b3ba7; }
-  .CodeMirror-placeholder { color: var(--text2) !important; opacity: 0.5 !important; }
 
-  .cm-s-default .CodeMirror-activeline-background { background: rgba(108,92,231,0.04) !important; }
-  .cm-s-default .CodeMirror-matchingtag { background: rgba(0,206,201,0.1); }
-
-  /* ---- 源码弹窗 ---- */
+  /* 源码弹窗 */
   .modal-overlay {
     position: fixed; inset: 0; z-index: 1000;
     background: rgba(0,0,0,0.7);
@@ -264,36 +266,16 @@
     flex: 1; height: 100%; border: 1px solid var(--border);
     border-radius: 8px; overflow: hidden;
   }
-  .modal-code-area textarea { display: block; width: 100%; height: 100%; }
 </style>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/codemirror.min.css">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/codemirror.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/python/python.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/javascript/javascript.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/clike/clike.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/go/go.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/edit/matchbrackets.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/fold/foldcode.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/fold/foldgutter.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/fold/brace-fold.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/fold/indent-fold.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/fold/comment-fold.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/selection/active-line.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/xml/xml.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/css/css.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/htmlmixed/htmlmixed.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/display/placeholder.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/edit/closetag.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/fold/xml-fold.min.js"></script>
 </head>
-<body>
+<body class="light">
 
 <header>
-  <h1>&#x3C;/&#x3E; 编程语言转换器 <span>Code Converter</span></h1>
+  <h1>&lt;/&gt; 编程语言转换器 <span>Code Converter</span></h1>
   <div class="header-actions">
-    <div class="badge">v1.1</div>
+    <div class="badge">v1.2</div>
     <div class="badge">规则引擎</div>
-    <button class="theme-toggle" id="themeToggle" title="切换主题">&#9790;</button>
+    <button class="theme-toggle" id="themeToggle" title="切换主题">☀</button>
   </div>
 </header>
 
@@ -321,10 +303,10 @@
         <option value="go">Go</option>
       </select>
     </div>
-    <button class="btn btn-primary" id="convertBtn">&#9654; 转换</button>
-    <button class="btn btn-secondary" id="swapBtn">&#8646; 互换</button>
-    <button class="btn btn-secondary" id="clearAllBtn">&#x1F5D1; 清空</button>
-    <button class="btn btn-secondary" id="viewSourceBtn">&#x1F4C4; 查看源码</button>
+    <button class="btn btn-primary" id="convertBtn" disabled="">▶ 转换</button>
+    <button class="btn btn-secondary" id="swapBtn">⇆ 互换</button>
+    <button class="btn btn-secondary" id="clearAllBtn">🗑 清空</button>
+    <button class="btn btn-secondary" id="viewSourceBtn">📄 查看源码</button>
     <div class="examples">
       <span class="chip" data-example="hello">Hello World</span>
       <span class="chip" data-example="fib">斐波那契</span>
@@ -342,12 +324,12 @@
             <span id="fromLabel">Python</span>
           </span>
           <div class="editor-meta">
-            <span id="fromStats">0 行</span>
-            <button class="btn btn-secondary btn-icon" id="clearBtn" title="清空">&#x1F5D1;</button>
+            <span id="fromStats">1 行</span>
+            <button class="btn btn-secondary btn-icon" id="clearBtn" title="清空">🗑</button>
           </div>
         </div>
         <div class="code-area">
-          <textarea id="sourceCode" placeholder="在此粘贴源代码..." spellcheck="false"></textarea>
+          <textarea id="sourceCode" placeholder="在此粘贴源代码..." spellcheck="false" style="display: none;"></textarea><div class="CodeMirror cm-s-default CodeMirror-empty" translate="no" style="clip-path: inset(0px);"><div style="overflow: hidden; position: relative; width: 3px; height: 0px; top: 4px; left: 34px;"><textarea autocorrect="off" autocapitalize="off" spellcheck="false" tabindex="0" style="position: absolute; bottom: -1em; padding: 0px; width: 1000px; height: 1em; min-height: 1em; outline: none;"></textarea></div><div class="CodeMirror-vscrollbar" tabindex="-1" cm-not-content="true"><div style="min-width: 1px; height: 0px;"></div></div><div class="CodeMirror-hscrollbar" tabindex="-1" cm-not-content="true"><div style="height: 100%; min-height: 1px; width: 0px;"></div></div><div class="CodeMirror-scrollbar-filler" cm-not-content="true"></div><div class="CodeMirror-gutter-filler" cm-not-content="true"></div><div class="CodeMirror-scroll" tabindex="-1"><div class="CodeMirror-sizer" style="margin-left: 30px; margin-bottom: -15px; border-right-width: 35px; min-height: 30px; min-width: 7px; padding-right: 0px; padding-bottom: 0px;"><div style="position: relative; top: 0px;"><div class="CodeMirror-lines" role="presentation"><div role="presentation" style="position: relative; outline: none;"><pre class="CodeMirror-placeholder CodeMirror-line-like" style="height: 0px; overflow: visible; direction: ltr;">在此粘贴源代码...</pre><div class="CodeMirror-measure"><div class="CodeMirror-linenumber CodeMirror-gutter-elt"><div>1</div></div></div><div class="CodeMirror-measure"></div><div style="position: relative; z-index: 1;"></div><div class="CodeMirror-cursors"><div class="CodeMirror-cursor" style="left: 4px; top: 0px; height: 22.3906px;">&nbsp;</div></div><div class="CodeMirror-code" role="presentation"><div class="CodeMirror-activeline" style="position: relative;"><div class="CodeMirror-activeline-background CodeMirror-linebackground"></div><div class="CodeMirror-gutter-background CodeMirror-activeline-gutter" style="left: -30px; width: 30px;"></div><div class="CodeMirror-gutter-wrapper CodeMirror-activeline-gutter" aria-hidden="true" style="left: -30px;"><div class="CodeMirror-linenumber CodeMirror-gutter-elt" style="left: 0px; width: 21px;">1</div></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span cm-text="">​</span></span></pre></div></div></div></div></div></div><div style="position: absolute; height: 35px; width: 1px; border-bottom: 0px solid transparent; top: 30px;"></div><div class="CodeMirror-gutters" style="height: 65px; left: 0px;"><div class="CodeMirror-gutter CodeMirror-foldgutter"></div><div class="CodeMirror-gutter CodeMirror-linenumbers" style="width: 29px;"></div></div></div></div>
         </div>
       </div>
 
@@ -358,12 +340,12 @@
             <span id="toLabel">JavaScript</span>
           </span>
           <div class="editor-meta">
-            <span id="toStats">0 行</span>
-            <button class="btn btn-secondary btn-icon" id="copyBtn" title="复制结果">&#x1F4CB;</button>
+            <span id="toStats">1 行</span>
+            <button class="btn btn-secondary btn-icon" id="copyBtn" title="复制结果">📋</button>
           </div>
         </div>
         <div class="code-area">
-          <textarea id="resultCode" placeholder="转换后的代码将显示在此处..." spellcheck="false" readonly></textarea>
+          <textarea id="resultCode" placeholder="转换后的代码将显示在此处..." spellcheck="false" readonly="" style="display: none;"></textarea><div class="CodeMirror cm-s-default CodeMirror-empty" translate="no" style="clip-path: inset(0px);"><div style="overflow: hidden; position: relative; width: 3px; height: 0px; top: 4px; left: 34px;"><textarea autocorrect="off" autocapitalize="off" spellcheck="false" readonly="" tabindex="0" style="position: absolute; bottom: -1em; padding: 0px; width: 1000px; height: 1em; min-height: 1em; outline: none;"></textarea></div><div class="CodeMirror-vscrollbar" tabindex="-1" cm-not-content="true"><div style="min-width: 1px; height: 0px;"></div></div><div class="CodeMirror-hscrollbar" tabindex="-1" cm-not-content="true"><div style="height: 100%; min-height: 1px; width: 0px;"></div></div><div class="CodeMirror-scrollbar-filler" cm-not-content="true"></div><div class="CodeMirror-gutter-filler" cm-not-content="true"></div><div class="CodeMirror-scroll" tabindex="-1"><div class="CodeMirror-sizer" style="margin-left: 30px; margin-bottom: -15px; border-right-width: 35px; min-height: 30px; min-width: 7px; padding-right: 0px; padding-bottom: 0px;"><div style="position: relative; top: 0px;"><div class="CodeMirror-lines" role="presentation"><div role="presentation" style="position: relative; outline: none;"><pre class="CodeMirror-placeholder CodeMirror-line-like" style="height: 0px; overflow: visible; direction: ltr;">转换后的代码将显示在此处...</pre><div class="CodeMirror-measure"><div class="CodeMirror-linenumber CodeMirror-gutter-elt"><div>1</div></div></div><div class="CodeMirror-measure"></div><div style="position: relative; z-index: 1;"></div><div class="CodeMirror-cursors"><div class="CodeMirror-cursor" style="left: 4px; top: 0px; height: 22.3906px;">&nbsp;</div></div><div class="CodeMirror-code" role="presentation"><div style="position: relative;"><div class="CodeMirror-gutter-wrapper" aria-hidden="true" style="left: -30px;"><div class="CodeMirror-linenumber CodeMirror-gutter-elt" style="left: 0px; width: 21px;">1</div></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span cm-text="">​</span></span></pre></div></div></div></div></div></div><div style="position: absolute; height: 35px; width: 1px; border-bottom: 0px solid transparent; top: 30px;"></div><div class="CodeMirror-gutters" style="height: 65px; left: 0px;"><div class="CodeMirror-gutter CodeMirror-foldgutter"></div><div class="CodeMirror-gutter CodeMirror-linenumbers" style="width: 29px;"></div></div></div></div>
         </div>
       </div>
     </div>
@@ -380,24 +362,24 @@
     代码编辑器推荐本地安装 Cascadia Code / Fira Code / JetBrains Mono 获得最佳显示效果。
   </div>
   <div style="text-align:center;padding:4px 0 16px;font-size:12px;color:var(--orange);opacity:0.7">
-    &#x26A0;&#xFE0F; 自动代码转换结果仅作参考，请人工校验代码逻辑，工具不保证转换代码可直接运行。
+    ⚠️ 自动代码转换结果仅作参考，请人工校验代码逻辑，工具不保证转换代码可直接运行。
   </div>
 </div>
 
 <div class="toast" id="toast"></div>
 
 <!-- 查看源码弹窗 -->
-<div class="modal-overlay" id="sourceModal">
+<div class="modal-overlay open" id="sourceModal">
   <div class="modal-header">
-    <span class="modal-title">&#x1F4C4; 页面完整源码</span>
+    <span class="modal-title">📄 页面完整源码</span>
     <div class="modal-actions">
-      <button class="btn btn-success" id="modalCopyBtn">&#x1F4CB; 一键复制全部源码</button>
-      <button class="btn btn-secondary" id="modalCloseBtn">&#x2715; 关闭</button>
+      <button class="btn btn-success" id="modalCopyBtn">📋 一键复制全部源码</button>
+      <button class="btn btn-secondary" id="modalCloseBtn">✕ 关闭</button>
     </div>
   </div>
   <div class="modal-body">
     <div class="modal-code-area">
-      <textarea id="modalSourceCode" spellcheck="false" readonly></textarea>
+      <textarea id="modalSourceCode" spellcheck="false" readonly="" style="display: none;"></textarea><div class="CodeMirror cm-s-default" translate="no" style="clip-path: inset(0px);"><div style="overflow: hidden; position: relative; width: 3px; height: 0px; top: 5px; left: 48px;"><textarea autocorrect="off" autocapitalize="off" spellcheck="false" readonly="" tabindex="0" style="position: absolute; bottom: -1em; padding: 0px; width: 1000px; height: 1em; min-height: 1em; outline: none;"></textarea></div><div class="CodeMirror-vscrollbar" tabindex="-1" cm-not-content="true" style="display: block; bottom: 0px;"><div style="min-width: 1px; height: 24872px;"></div></div><div class="CodeMirror-hscrollbar" tabindex="-1" cm-not-content="true" style="right: 15px; left: 43px;"><div style="height: 100%; min-height: 1px; width: 0px;"></div></div><div class="CodeMirror-scrollbar-filler" cm-not-content="true" style="height: 15px; width: 15px;"></div><div class="CodeMirror-gutter-filler" cm-not-content="true"></div><div class="CodeMirror-scroll" tabindex="-1"><div class="CodeMirror-sizer" style="margin-left: 43px; margin-bottom: -15px; border-right-width: 35px; min-height: 24872px; min-width: 23056.9px; padding-right: 15px; padding-bottom: 0px;"><div style="position: relative; top: 0px;"><div class="CodeMirror-lines" role="presentation"><div role="presentation" style="position: relative; outline: none;"><div class="CodeMirror-measure"><div class="CodeMirror-linenumber CodeMirror-gutter-elt"><div>1110</div></div></div><div class="CodeMirror-measure"><pre class="CodeMirror-line" role="presentation"><span role="presentation" style="padding-right: 0.1px;">          <span class="cm-tag cm-bracket">&lt;</span><span class="cm-tag">textarea</span> <span class="cm-attribute">id</span>=<span class="cm-string">"sourceCode"</span> <span class="cm-attribute">placeholder</span>=<span class="cm-string">"在此粘贴源代码..."</span> <span class="cm-attribute">spellcheck</span>=<span class="cm-string">"false"</span> <span class="cm-attribute">style</span>=<span class="cm-string">"display: none;"</span><span class="cm-tag cm-bracket">&gt;&lt;/</span><span class="cm-tag">textarea</span><span class="cm-tag cm-bracket">&gt;&lt;</span><span class="cm-tag">div</span> <span class="cm-attribute">class</span>=<span class="cm-string">"CodeMirror cm-s-default CodeMirror-empty"</span> <span class="cm-attribute">translate</span>=<span class="cm-string">"no"</span> <span class="cm-attribute">style</span>=<span class="cm-string">"clip-path: inset(0px);"</span><span class="cm-tag cm-bracket">&gt;&lt;</span><span class="cm-tag">div</span> <span class="cm-attribute">style</span>=<span class="cm-string">"overflow: hidden; position: relative; width: 3px; height: 0px; top: 4px; left: 34px;"</span><span class="cm-tag cm-bracket">&gt;&lt;</span><span class="cm-tag">textarea</span> <span class="cm-attribute">autocorrect</span>=<span class="cm-string">"off"</span> <span class="cm-attribute">autocapitalize</span>=<span class="cm-string">"off"</span> <span class="cm-attribute">spellcheck</span>=<span class="cm-string">"false"</span> <span class="cm-attribute">tabindex</span>=<span class="cm-string">"0"</span> <span class="cm-attribute">style</span>=<span class="cm-string">"position: absolute; bottom: -1em; padding: 0px; width: 1000px; height: 1em; min-height: 1em; outline: none;"</span><span class="cm-tag cm-bracket">&gt;&lt;/</span><span class="cm-tag">textarea</span><span class="cm-tag cm-bracket">&gt;&lt;/</span><span class="cm-tag">div</span><span class="cm-tag cm-bracket">&gt;&lt;</span><span class="cm-tag">div</span> <span class="cm-attribute">class</span>=<span class="cm-string">"CodeMirror-vscrollbar"</span> <span class="cm-attribute">tabindex</span>=<span class="cm-string">"-1"</span> <span class="cm-attribute">cm-not-content</span>=<span class="cm-string">"true"</span><span class="cm-tag cm-bracket">&gt;&lt;</span><span class="cm-tag">div</span> <span class="cm-attribute">style</span>=<span class="cm-string">"min-width: 1px; height: 0px;"</span><span class="cm-tag cm-bracket">&gt;&lt;/</span><span class="cm-tag">div</span><span class="cm-tag cm-bracket">&gt;&lt;/</span><span class="cm-tag">div</span><span class="cm-tag cm-bracket">&gt;&lt;</span><span class="cm-tag">div</span> <span class="cm-attribute">class</span>=<span class="cm-string">"CodeMirror-hscrollbar"</span> <span class="cm-attribute">tabindex</span>=<span class="cm-string">"-1"</span> <span class="cm-attribute">cm-not-content</span>=<span class="cm-string">"true"</span><span class="cm-tag cm-bracket">&gt;&lt;</span><span class="cm-tag">div</span> <span class="cm-attribute">style</span>=<span class="cm-string">"height: 100%; min-height: 1px; width: 0px;"</span><span class="cm-tag cm-bracket">&gt;&lt;/</span><span class="cm-tag">div</span><span class="cm-tag cm-bracket">&gt;&lt;/</span><span class="cm-tag">div</span><span class="cm-tag cm-bracket">&gt;&lt;</span><span class="cm-tag">div</span> <span class="cm-attribute">class</span>=<span class="cm-string">"CodeMirror-scrollbar-filler"</span> <span class="cm-attribute">cm-not-content</span>=<span class="cm-string">"true"</span><span class="cm-tag cm-bracket">&gt;&lt;/</span><span class="cm-tag">div</span><span class="cm-tag cm-bracket">&gt;&lt;</span><span class="cm-tag">div</span> <span class="cm-attribute">class</span>=<span class="cm-string">"CodeMirror-gutter-filler"</span> <span class="cm-attribute">cm-not-content</span>=<span class="cm-string">"true"</span><span class="cm-tag cm-bracket">&gt;&lt;/</span><span class="cm-tag">div</span><span class="cm-tag cm-bracket">&gt;&lt;</span><span class="cm-tag">div</span> <span class="cm-attribute">class</span>=<span class="cm-string">"CodeMirror-scroll"</span> <span class="cm-attribute">tabindex</span>=<span class="cm-string">"-1"</span><span class="cm-tag cm-bracket">&gt;&lt;</span><span class="cm-tag">div</span> <span class="cm-attribute">class</span>=<span class="cm-string">"CodeMirror-sizer"</span> <span class="cm-attribute">style</span>=<span class="cm-string">"margin-left: 30px; margin-bottom: -15px; border-right-width: 35px; min-height: 30px; min-width: 7px; padding-right: 0px; padding-bottom: 0px;"</span><span class="cm-tag cm-bracket">&gt;&lt;</span><span class="cm-tag">div</span> <span class="cm-attribute">style</span>=<span class="cm-string">"position: relative; top: 0px;"</span><span class="cm-tag cm-bracket">&gt;&lt;</span><span class="cm-tag">div</span> <span class="cm-attribute">class</span>=<span class="cm-string">"CodeMirror-lines"</span> <span class="cm-attribute">role</span>=<span class="cm-string">"presentation"</span><span class="cm-tag cm-bracket">&gt;&lt;</span><span class="cm-tag">div</span> <span class="cm-attribute">role</span>=<span class="cm-string">"presentation"</span> <span class="cm-attribute">style</span>=<span class="cm-string">"position: relative; outline: none;"</span><span class="cm-tag cm-bracket">&gt;&lt;</span><span class="cm-tag">pre</span> <span class="cm-attribute">class</span>=<span class="cm-string">"CodeMirror-placeholder CodeMirror-line-like"</span> <span class="cm-attribute">style</span>=<span class="cm-string">"height: 0px; overflow: visible; direction: ltr;"</span><span class="cm-tag cm-bracket">&gt;</span>在此粘贴源代码...<span class="cm-tag cm-bracket">&lt;/</span><span class="cm-tag">pre</span><span class="cm-tag cm-bracket">&gt;&lt;</span><span class="cm-tag">div</span> <span class="cm-attribute">class</span>=<span class="cm-string">"CodeMirror-measure"</span><span class="cm-tag cm-bracket">&gt;&lt;</span><span class="cm-tag">div</span> <span class="cm-attribute">class</span>=<span class="cm-string">"CodeMirror-linenumber CodeMirror-gutter-elt"</span><span class="cm-tag cm-bracket">&gt;&lt;</span><span class="cm-tag">div</span><span class="cm-tag cm-bracket">&gt;</span>1<span class="cm-tag cm-bracket">&lt;/</span><span class="cm-tag">div</span><span class="cm-tag cm-bracket">&gt;&lt;/</span><span class="cm-tag">div</span><span class="cm-tag cm-bracket">&gt;&lt;/</span><span class="cm-tag">div</span><span class="cm-tag cm-bracket">&gt;&lt;</span><span class="cm-tag">div</span> <span class="cm-attribute">class</span>=<span class="cm-string">"CodeMirror-measure"</span><span class="cm-tag cm-bracket">&gt;&lt;/</span><span class="cm-tag">div</span><span class="cm-tag cm-bracket">&gt;&lt;</span><span class="cm-tag">div</span> <span class="cm-attribute">style</span>=<span class="cm-string">"position: relative; z-index: 1;"</span><span class="cm-tag cm-bracket">&gt;&lt;/</span><span class="cm-tag">div</span><span class="cm-tag cm-bracket">&gt;&lt;</span><span class="cm-tag">div</span> <span class="cm-attribute">class</span>=<span class="cm-string">"CodeMirror-cursors"</span><span class="cm-tag cm-bracket">&gt;&lt;</span><span class="cm-tag">div</span> <span class="cm-attribute">class</span>=<span class="cm-string">"CodeMirror-cursor"</span> <span class="cm-attribute">style</span>=<span class="cm-string">"left: 4px; top: 0px; height: 22.3906px;"</span><span class="cm-tag cm-bracket">&gt;</span><span class="cm-atom">&amp;nbsp;</span><span class="cm-tag cm-bracket">&lt;/</span><span class="cm-tag">div</span><span class="cm-tag cm-bracket">&gt;&lt;/</span><span class="cm-tag">div</span><span class="cm-tag cm-bracket">&gt;&lt;</span><span class="cm-tag">div</span> <span class="cm-attribute">class</span>=<span class="cm-string">"CodeMirror-code"</span> <span class="cm-attribute">role</span>=<span class="cm-string">"presentation"</span><span class="cm-tag cm-bracket">&gt;&lt;</span><span class="cm-tag">div</span> <span class="cm-attribute">class</span>=<span class="cm-string">"CodeMirror-activeline"</span> <span class="cm-attribute">style</span>=<span class="cm-string">"position: relative;"</span><span class="cm-tag cm-bracket">&gt;&lt;</span><span class="cm-tag">div</span> <span class="cm-attribute">class</span>=<span class="cm-string">"CodeMirror-activeline-background CodeMirror-linebackground"</span><span class="cm-tag cm-bracket">&gt;&lt;/</span><span class="cm-tag">div</span><span class="cm-tag cm-bracket">&gt;&lt;</span><span class="cm-tag">div</span> <span class="cm-attribute">class</span>=<span class="cm-string">"CodeMirror-gutter-background CodeMirror-activeline-gutter"</span> <span class="cm-attribute">style</span>=<span class="cm-string">"left: -30px; width: 30px;"</span><span class="cm-tag cm-bracket">&gt;&lt;/</span><span class="cm-tag">div</span><span class="cm-tag cm-bracket">&gt;&lt;</span><span class="cm-tag">div</span> <span class="cm-attribute">class</span>=<span class="cm-string">"CodeMirror-gutter-wrapper CodeMirror-activeline-gutter"</span> <span class="cm-attribute">aria-hidden</span>=<span class="cm-string">"true"</span> <span class="cm-attribute">style</span>=<span class="cm-string">"left: -30px;"</span><span class="cm-tag cm-bracket">&gt;&lt;</span><span class="cm-tag">div</span> <span class="cm-attribute">class</span>=<span class="cm-string">"CodeMirror-linenumber CodeMirror-gutter-elt"</span> <span class="cm-attribute">style</span>=<span class="cm-string">"left: 0px; width: 21px;"</span><span class="cm-tag cm-bracket">&gt;</span>1<span class="cm-tag cm-bracket">&lt;/</span><span class="cm-tag">div</span><span class="cm-tag cm-bracket">&gt;&lt;/</span><span class="cm-tag">div</span><span class="cm-tag cm-bracket">&gt;&lt;</span><span class="cm-tag">pre</span> <span class="cm-attribute">class</span>=<span class="cm-string">" CodeMirror-line "</span> <span class="cm-attribute">role</span>=<span class="cm-string">"presentation"</span><span class="cm-tag cm-bracket">&gt;&lt;</span><span class="cm-tag">span</span> <span class="cm-attribute">role</span>=<span class="cm-string">"presentation"</span> <span class="cm-attribute">style</span>=<span class="cm-string">"padding-right: 0.1px;"</span><span class="cm-tag cm-bracket">&gt;&lt;</span><span class="cm-tag">span</span> <span class="cm-attribute">cm-text</span>=<span class="cm-string">""</span><span class="cm-tag cm-bracket">&gt;</span><span class="cm-invalidchar" title="\u200b" aria-label="\u200b" cm-text="​">•</span><span class="cm-tag cm-bracket">&lt;/</span><span class="cm-tag">span</span><span class="cm-tag cm-bracket">&gt;&lt;/</span><span class="cm-tag">span</span><span class="cm-tag cm-bracket">&gt;&lt;/</span><span class="cm-tag">pre</span><span class="cm-tag cm-bracket">&gt;&lt;/</span><span class="cm-tag">div</span><span class="cm-tag cm-bracket">&gt;&lt;/</span><span class="cm-tag">div</span><span class="cm-tag cm-bracket">&gt;&lt;/</span><span class="cm-tag">div</span><span class="cm-tag cm-bracket">&gt;&lt;/</span><span class="cm-tag">div</span><span class="cm-tag cm-bracket">&gt;&lt;/</span><span class="cm-tag">div</span><span class="cm-tag cm-bracket">&gt;&lt;/</span><span class="cm-tag">div</span><span class="cm-tag cm-bracket">&gt;&lt;</span><span class="cm-tag">div</span> <span class="cm-attribute">style</span>=<span class="cm-string">"position: absolute; height: 35px; width: 1px; border-bottom: 0px solid transparent; top: 30px;"</span><span class="cm-tag cm-bracket">&gt;&lt;/</span><span class="cm-tag">div</span><span class="cm-tag cm-bracket">&gt;&lt;</span><span class="cm-tag">div</span> <span class="cm-attribute">class</span>=<span class="cm-string">"CodeMirror-gutters"</span> <span class="cm-attribute">style</span>=<span class="cm-string">"height: 65px; left: 0px;"</span><span class="cm-tag cm-bracket">&gt;&lt;</span><span class="cm-tag">div</span> <span class="cm-attribute">class</span>=<span class="cm-string">"CodeMirror-gutter CodeMirror-foldgutter"</span><span class="cm-tag cm-bracket">&gt;&lt;/</span><span class="cm-tag">div</span><span class="cm-tag cm-bracket">&gt;&lt;</span><span class="cm-tag">div</span> <span class="cm-attribute">class</span>=<span class="cm-string">"CodeMirror-gutter CodeMirror-linenumbers"</span> <span class="cm-attribute">style</span>=<span class="cm-string">"width: 29px;"</span><span class="cm-tag cm-bracket">&gt;&lt;/</span><span class="cm-tag">div</span><span class="cm-tag cm-bracket">&gt;&lt;/</span><span class="cm-tag">div</span><span class="cm-tag cm-bracket">&gt;&lt;/</span><span class="cm-tag">div</span><span class="cm-tag cm-bracket">&gt;&lt;/</span><span class="cm-tag">div</span><span class="cm-tag cm-bracket">&gt;</span></span></pre></div><div style="position: relative; z-index: 1;"></div><div class="CodeMirror-cursors" style=""><div class="CodeMirror-cursor" style="left: 4px; top: 0px; height: 22.3906px;">&nbsp;</div></div><div class="CodeMirror-code" role="presentation" style=""><div style="position: relative;"><div class="CodeMirror-gutter-wrapper" aria-hidden="true" style="left: -43px;"><div class="CodeMirror-linenumber CodeMirror-gutter-elt" style="left: 0px; width: 34px;">1</div></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-meta">&lt;!DOCTYPE html&gt;</span></span></pre></div><div style="position: relative;"><div class="CodeMirror-gutter-wrapper" aria-hidden="true" style="left: -43px;"><div class="CodeMirror-linenumber CodeMirror-gutter-elt" style="left: 0px; width: 34px;">2</div><div class="CodeMirror-gutter-elt" style="left: 0px; width: 0px;"><div class="CodeMirror-foldgutter-open CodeMirror-guttermarker-subtle"></div></div></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-tag cm-bracket">&lt;</span><span class="cm-tag">html</span> <span class="cm-attribute">lang</span>=<span class="cm-string">"zh-CN"</span><span class="cm-tag cm-bracket">&gt;&lt;</span><span class="cm-tag">head</span><span class="cm-tag cm-bracket">&gt;</span></span></pre></div><div style="position: relative;"><div class="CodeMirror-gutter-wrapper" aria-hidden="true" style="left: -43px;"><div class="CodeMirror-linenumber CodeMirror-gutter-elt" style="left: 0px; width: 34px;">3</div></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-tag cm-bracket">&lt;</span><span class="cm-tag">meta</span> <span class="cm-attribute">charset</span>=<span class="cm-string">"UTF-8"</span><span class="cm-tag cm-bracket">&gt;</span></span></pre></div><div style="position: relative;"><div class="CodeMirror-gutter-wrapper" aria-hidden="true" style="left: -43px;"><div class="CodeMirror-linenumber CodeMirror-gutter-elt" style="left: 0px; width: 34px;">4</div></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-tag cm-bracket">&lt;</span><span class="cm-tag">meta</span> <span class="cm-attribute">name</span>=<span class="cm-string">"viewport"</span> <span class="cm-attribute">content</span>=<span class="cm-string">"width=device-width, initial-scale=1.0"</span><span class="cm-tag cm-bracket">&gt;</span></span></pre></div><div style="position: relative;"><div class="CodeMirror-gutter-wrapper" aria-hidden="true" style="left: -43px;"><div class="CodeMirror-linenumber CodeMirror-gutter-elt" style="left: 0px; width: 34px;">5</div><div class="CodeMirror-gutter-elt" style="left: 0px; width: 0px;"><div class="CodeMirror-foldgutter-open CodeMirror-guttermarker-subtle"></div></div></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-tag cm-bracket">&lt;</span><span class="cm-tag">title</span><span class="cm-tag cm-bracket">&gt;</span>编程语言转换器<span class="cm-tag cm-bracket">&lt;/</span><span class="cm-tag">title</span><span class="cm-tag cm-bracket">&gt;</span></span></pre></div><div style="position: relative;"><div class="CodeMirror-gutter-wrapper" aria-hidden="true" style="left: -43px;"><div class="CodeMirror-linenumber CodeMirror-gutter-elt" style="left: 0px; width: 34px;">6</div></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-tag cm-bracket">&lt;</span><span class="cm-tag">link</span> <span class="cm-attribute">rel</span>=<span class="cm-string">"stylesheet"</span> <span class="cm-attribute">href</span>=<span class="cm-string">"https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/codemirror.min.css"</span><span class="cm-tag cm-bracket">&gt;</span></span></pre></div><div style="position: relative;"><div class="CodeMirror-gutter-wrapper" aria-hidden="true" style="left: -43px;"><div class="CodeMirror-linenumber CodeMirror-gutter-elt" style="left: 0px; width: 34px;">7</div></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-tag cm-bracket">&lt;</span><span class="cm-tag">script</span> <span class="cm-attribute">src</span>=<span class="cm-string">"https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/codemirror.min.js"</span><span class="cm-tag cm-bracket">&gt;&lt;/</span><span class="cm-tag">script</span><span class="cm-tag cm-bracket">&gt;</span></span></pre></div><div style="position: relative;"><div class="CodeMirror-gutter-wrapper" aria-hidden="true" style="left: -43px;"><div class="CodeMirror-linenumber CodeMirror-gutter-elt" style="left: 0px; width: 34px;">8</div></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-tag cm-bracket">&lt;</span><span class="cm-tag">script</span> <span class="cm-attribute">src</span>=<span class="cm-string">"https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/python/python.min.js"</span><span class="cm-tag cm-bracket">&gt;&lt;/</span><span class="cm-tag">script</span><span class="cm-tag cm-bracket">&gt;</span></span></pre></div><div style="position: relative;"><div class="CodeMirror-gutter-wrapper" aria-hidden="true" style="left: -43px;"><div class="CodeMirror-linenumber CodeMirror-gutter-elt" style="left: 0px; width: 34px;">9</div></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-tag cm-bracket">&lt;</span><span class="cm-tag">script</span> <span class="cm-attribute">src</span>=<span class="cm-string">"https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/javascript/javascript.min.js"</span><span class="cm-tag cm-bracket">&gt;&lt;/</span><span class="cm-tag">script</span><span class="cm-tag cm-bracket">&gt;</span></span></pre></div><div style="position: relative;"><div class="CodeMirror-gutter-wrapper" aria-hidden="true" style="left: -43px;"><div class="CodeMirror-linenumber CodeMirror-gutter-elt" style="left: 0px; width: 34px;">10</div></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-tag cm-bracket">&lt;</span><span class="cm-tag">script</span> <span class="cm-attribute">src</span>=<span class="cm-string">"https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/clike/clike.min.js"</span><span class="cm-tag cm-bracket">&gt;&lt;/</span><span class="cm-tag">script</span><span class="cm-tag cm-bracket">&gt;</span></span></pre></div><div style="position: relative;"><div class="CodeMirror-gutter-wrapper" aria-hidden="true" style="left: -43px;"><div class="CodeMirror-linenumber CodeMirror-gutter-elt" style="left: 0px; width: 34px;">11</div></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-tag cm-bracket">&lt;</span><span class="cm-tag">script</span> <span class="cm-attribute">src</span>=<span class="cm-string">"https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/go/go.min.js"</span><span class="cm-tag cm-bracket">&gt;&lt;/</span><span class="cm-tag">script</span><span class="cm-tag cm-bracket">&gt;</span></span></pre></div><div style="position: relative;"><div class="CodeMirror-gutter-wrapper" aria-hidden="true" style="left: -43px;"><div class="CodeMirror-linenumber CodeMirror-gutter-elt" style="left: 0px; width: 34px;">12</div></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-tag cm-bracket">&lt;</span><span class="cm-tag">script</span> <span class="cm-attribute">src</span>=<span class="cm-string">"https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/xml/xml.min.js"</span><span class="cm-tag cm-bracket">&gt;&lt;/</span><span class="cm-tag">script</span><span class="cm-tag cm-bracket">&gt;</span></span></pre></div><div style="position: relative;"><div class="CodeMirror-gutter-wrapper" aria-hidden="true" style="left: -43px;"><div class="CodeMirror-linenumber CodeMirror-gutter-elt" style="left: 0px; width: 34px;">13</div></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-tag cm-bracket">&lt;</span><span class="cm-tag">script</span> <span class="cm-attribute">src</span>=<span class="cm-string">"https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/css/css.min.js"</span><span class="cm-tag cm-bracket">&gt;&lt;/</span><span class="cm-tag">script</span><span class="cm-tag cm-bracket">&gt;</span></span></pre></div><div style="position: relative;"><div class="CodeMirror-gutter-wrapper" aria-hidden="true" style="left: -43px;"><div class="CodeMirror-linenumber CodeMirror-gutter-elt" style="left: 0px; width: 34px;">14</div></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-tag cm-bracket">&lt;</span><span class="cm-tag">script</span> <span class="cm-attribute">src</span>=<span class="cm-string">"https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/htmlmixed/htmlmixed.min.js"</span><span class="cm-tag cm-bracket">&gt;&lt;/</span><span class="cm-tag">script</span><span class="cm-tag cm-bracket">&gt;</span></span></pre></div><div style="position: relative;"><div class="CodeMirror-gutter-wrapper" aria-hidden="true" style="left: -43px;"><div class="CodeMirror-linenumber CodeMirror-gutter-elt" style="left: 0px; width: 34px;">15</div></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-tag cm-bracket">&lt;</span><span class="cm-tag">script</span> <span class="cm-attribute">src</span>=<span class="cm-string">"https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/edit/matchbrackets.min.js"</span><span class="cm-tag cm-bracket">&gt;&lt;/</span><span class="cm-tag">script</span><span class="cm-tag cm-bracket">&gt;</span></span></pre></div><div style="position: relative;"><div class="CodeMirror-gutter-wrapper" aria-hidden="true" style="left: -43px;"><div class="CodeMirror-linenumber CodeMirror-gutter-elt" style="left: 0px; width: 34px;">16</div></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-tag cm-bracket">&lt;</span><span class="cm-tag">script</span> <span class="cm-attribute">src</span>=<span class="cm-string">"https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/fold/foldcode.min.js"</span><span class="cm-tag cm-bracket">&gt;&lt;/</span><span class="cm-tag">script</span><span class="cm-tag cm-bracket">&gt;</span></span></pre></div><div style="position: relative;"><div class="CodeMirror-gutter-wrapper" aria-hidden="true" style="left: -43px;"><div class="CodeMirror-linenumber CodeMirror-gutter-elt" style="left: 0px; width: 34px;">17</div></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-tag cm-bracket">&lt;</span><span class="cm-tag">script</span> <span class="cm-attribute">src</span>=<span class="cm-string">"https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/fold/foldgutter.min.js"</span><span class="cm-tag cm-bracket">&gt;&lt;/</span><span class="cm-tag">script</span><span class="cm-tag cm-bracket">&gt;</span></span></pre></div><div style="position: relative;"><div class="CodeMirror-gutter-wrapper" aria-hidden="true" style="left: -43px;"><div class="CodeMirror-linenumber CodeMirror-gutter-elt" style="left: 0px; width: 34px;">18</div></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-tag cm-bracket">&lt;</span><span class="cm-tag">script</span> <span class="cm-attribute">src</span>=<span class="cm-string">"https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/fold/brace-fold.min.js"</span><span class="cm-tag cm-bracket">&gt;&lt;/</span><span class="cm-tag">script</span><span class="cm-tag cm-bracket">&gt;</span></span></pre></div><div style="position: relative;"><div class="CodeMirror-gutter-wrapper" aria-hidden="true" style="left: -43px;"><div class="CodeMirror-linenumber CodeMirror-gutter-elt" style="left: 0px; width: 34px;">19</div></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-tag cm-bracket">&lt;</span><span class="cm-tag">script</span> <span class="cm-attribute">src</span>=<span class="cm-string">"https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/fold/indent-fold.min.js"</span><span class="cm-tag cm-bracket">&gt;&lt;/</span><span class="cm-tag">script</span><span class="cm-tag cm-bracket">&gt;</span></span></pre></div><div style="position: relative;"><div class="CodeMirror-gutter-wrapper" aria-hidden="true" style="left: -43px;"><div class="CodeMirror-linenumber CodeMirror-gutter-elt" style="left: 0px; width: 34px;">20</div></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-tag cm-bracket">&lt;</span><span class="cm-tag">script</span> <span class="cm-attribute">src</span>=<span class="cm-string">"https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/fold/comment-fold.min.js"</span><span class="cm-tag cm-bracket">&gt;&lt;/</span><span class="cm-tag">script</span><span class="cm-tag cm-bracket">&gt;</span></span></pre></div><div style="position: relative;"><div class="CodeMirror-gutter-wrapper" aria-hidden="true" style="left: -43px;"><div class="CodeMirror-linenumber CodeMirror-gutter-elt" style="left: 0px; width: 34px;">21</div></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-tag cm-bracket">&lt;</span><span class="cm-tag">script</span> <span class="cm-attribute">src</span>=<span class="cm-string">"https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/fold/xml-fold.min.js"</span><span class="cm-tag cm-bracket">&gt;&lt;/</span><span class="cm-tag">script</span><span class="cm-tag cm-bracket">&gt;</span></span></pre></div><div style="position: relative;"><div class="CodeMirror-gutter-wrapper" aria-hidden="true" style="left: -43px;"><div class="CodeMirror-linenumber CodeMirror-gutter-elt" style="left: 0px; width: 34px;">22</div></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-tag cm-bracket">&lt;</span><span class="cm-tag">script</span> <span class="cm-attribute">src</span>=<span class="cm-string">"https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/selection/active-line.min.js"</span><span class="cm-tag cm-bracket">&gt;&lt;/</span><span class="cm-tag">script</span><span class="cm-tag cm-bracket">&gt;</span></span></pre></div><div style="position: relative;"><div class="CodeMirror-gutter-wrapper" aria-hidden="true" style="left: -43px;"><div class="CodeMirror-linenumber CodeMirror-gutter-elt" style="left: 0px; width: 34px;">23</div></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-tag cm-bracket">&lt;</span><span class="cm-tag">script</span> <span class="cm-attribute">src</span>=<span class="cm-string">"https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/display/placeholder.min.js"</span><span class="cm-tag cm-bracket">&gt;&lt;/</span><span class="cm-tag">script</span><span class="cm-tag cm-bracket">&gt;</span></span></pre></div><div style="position: relative;"><div class="CodeMirror-gutter-wrapper" aria-hidden="true" style="left: -43px;"><div class="CodeMirror-linenumber CodeMirror-gutter-elt" style="left: 0px; width: 34px;">24</div><div class="CodeMirror-gutter-elt" style="left: 0px; width: 0px;"><div class="CodeMirror-foldgutter-open CodeMirror-guttermarker-subtle"></div></div></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-tag cm-bracket">&lt;</span><span class="cm-tag">style</span><span class="cm-tag cm-bracket">&gt;</span></span></pre></div><div style="position: relative;"><div class="CodeMirror-gutter-wrapper" aria-hidden="true" style="left: -43px;"><div class="CodeMirror-linenumber CodeMirror-gutter-elt" style="left: 0px; width: 34px;">25</div><div class="CodeMirror-gutter-elt" style="left: 0px; width: 0px;"><div class="CodeMirror-foldgutter-open CodeMirror-guttermarker-subtle"></div></div></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">  :<span class="cm-variable-3">root</span> {</span></pre></div><div style="position: relative;"><div class="CodeMirror-gutter-wrapper" aria-hidden="true" style="left: -43px;"><div class="CodeMirror-linenumber CodeMirror-gutter-elt" style="left: 0px; width: 34px;">26</div></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">    <span class="cm-variable-2">--bg</span>: <span class="cm-atom">#0f0f1a</span>;</span></pre></div><div style="position: relative;"><div class="CodeMirror-gutter-wrapper" aria-hidden="true" style="left: -43px;"><div class="CodeMirror-linenumber CodeMirror-gutter-elt" style="left: 0px; width: 34px;">27</div></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">    <span class="cm-variable-2">--surface</span>: <span class="cm-atom">#1a1a2e</span>;</span></pre></div><div style="position: relative;"><div class="CodeMirror-gutter-wrapper" aria-hidden="true" style="left: -43px;"><div class="CodeMirror-linenumber CodeMirror-gutter-elt" style="left: 0px; width: 34px;">28</div></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">    <span class="cm-variable-2">--surface2</span>: <span class="cm-atom">#232344</span>;</span></pre></div><div style="position: relative;"><div class="CodeMirror-gutter-wrapper" aria-hidden="true" style="left: -43px;"><div class="CodeMirror-linenumber CodeMirror-gutter-elt" style="left: 0px; width: 34px;">29</div></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">    <span class="cm-variable-2">--border</span>: <span class="cm-atom">#2a2a4a</span>;</span></pre></div><div style="position: relative;"><div class="CodeMirror-gutter-wrapper" aria-hidden="true" style="left: -43px;"><div class="CodeMirror-linenumber CodeMirror-gutter-elt" style="left: 0px; width: 34px;">30</div></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">    <span class="cm-variable-2">--text</span>: <span class="cm-atom">#e0e0f0</span>;</span></pre></div><div style="position: relative;"><div class="CodeMirror-gutter-wrapper" aria-hidden="true" style="left: -43px;"><div class="CodeMirror-linenumber CodeMirror-gutter-elt" style="left: 0px; width: 34px;">31</div></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">    <span class="cm-variable-2">--text2</span>: <span class="cm-atom">#8888aa</span>;</span></pre></div><div style="position: relative;"><div class="CodeMirror-gutter-wrapper" aria-hidden="true" style="left: -43px;"><div class="CodeMirror-linenumber CodeMirror-gutter-elt" style="left: 0px; width: 34px;">32</div></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">    <span class="cm-variable-2">--accent</span>: <span class="cm-atom">#6c5ce7</span>;</span></pre></div><div style="position: relative;"><div class="CodeMirror-gutter-wrapper" aria-hidden="true" style="left: -43px;"><div class="CodeMirror-linenumber CodeMirror-gutter-elt" style="left: 0px; width: 34px;">33</div></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">    <span class="cm-variable-2">--accent2</span>: <span class="cm-atom">#a29bfe</span>;</span></pre></div><div style="position: relative;"><div class="CodeMirror-gutter-wrapper" aria-hidden="true" style="left: -43px;"><div class="CodeMirror-linenumber CodeMirror-gutter-elt" style="left: 0px; width: 34px;">34</div></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">    <span class="cm-variable-2">--green</span>: <span class="cm-atom">#00cec9</span>;</span></pre></div><div style="position: relative;"><div class="CodeMirror-gutter-wrapper" aria-hidden="true" style="left: -43px;"><div class="CodeMirror-linenumber CodeMirror-gutter-elt" style="left: 0px; width: 34px;">35</div></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">    <span class="cm-variable-2">--orange</span>: <span class="cm-atom">#fd79a8</span>;</span></pre></div><div style="position: relative;"><div class="CodeMirror-gutter-wrapper" aria-hidden="true" style="left: -43px;"><div class="CodeMirror-linenumber CodeMirror-gutter-elt" style="left: 0px; width: 34px;">36</div></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">    <span class="cm-variable-2">--blue</span>: <span class="cm-atom">#74b9ff</span>;</span></pre></div><div style="position: relative;"><div class="CodeMirror-gutter-wrapper" aria-hidden="true" style="left: -43px;"><div class="CodeMirror-linenumber CodeMirror-gutter-elt" style="left: 0px; width: 34px;">37</div></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">    <span class="cm-variable-2">--radius</span>: <span class="cm-number">12px</span>;</span></pre></div><div style="position: relative;"><div class="CodeMirror-gutter-wrapper" aria-hidden="true" style="left: -43px;"><div class="CodeMirror-linenumber CodeMirror-gutter-elt" style="left: 0px; width: 34px;">38</div></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">    <span class="cm-variable-2">--font</span>: <span class="cm-string">'Cascadia Code'</span>, <span class="cm-string">'Fira Code'</span>, <span class="cm-string">'JetBrains Mono'</span>, <span class="cm-atom">monospace</span>;</span></pre></div><div style="position: relative;"><div class="CodeMirror-gutter-wrapper" aria-hidden="true" style="left: -43px;"><div class="CodeMirror-linenumber CodeMirror-gutter-elt" style="left: 0px; width: 34px;">39</div></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">    <span class="cm-variable-2">--toast-bg</span>: <span class="cm-variable cm-callee">var</span>(<span class="cm-variable-2">--surface</span>);</span></pre></div><div style="position: relative;"><div class="CodeMirror-gutter-wrapper" aria-hidden="true" style="left: -43px;"><div class="CodeMirror-linenumber CodeMirror-gutter-elt" style="left: 0px; width: 34px;">40</div></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">  }</span></pre></div><div style="position: relative;"><div class="CodeMirror-gutter-wrapper" aria-hidden="true" style="left: -43px;"><div class="CodeMirror-linenumber CodeMirror-gutter-elt" style="left: 0px; width: 34px;">41</div><div class="CodeMirror-gutter-elt" style="left: 0px; width: 0px;"><div class="CodeMirror-foldgutter-open CodeMirror-guttermarker-subtle"></div></div></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">  <span class="cm-tag">body</span><span class="cm-qualifier">.light</span> {</span></pre></div><div style="position: relative;"><div class="CodeMirror-gutter-wrapper" aria-hidden="true" style="left: -43px;"><div class="CodeMirror-linenumber CodeMirror-gutter-elt" style="left: 0px; width: 34px;">42</div></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">    <span class="cm-variable-2">--bg</span>: <span class="cm-atom">#f0f0f8</span>;</span></pre></div><div style="position: relative;"><div class="CodeMirror-gutter-wrapper" aria-hidden="true" style="left: -43px;"><div class="CodeMirror-linenumber CodeMirror-gutter-elt" style="left: 0px; width: 34px;">43</div></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">    <span class="cm-variable-2">--surface</span>: <span class="cm-atom">#ffffff</span>;</span></pre></div><div style="position: relative;"><div class="CodeMirror-gutter-wrapper" aria-hidden="true" style="left: -43px;"><div class="CodeMirror-linenumber CodeMirror-gutter-elt" style="left: 0px; width: 34px;">44</div></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">    <span class="cm-variable-2">--surface2</span>: <span class="cm-atom">#e8e8f0</span>;</span></pre></div><div style="position: relative;"><div class="CodeMirror-gutter-wrapper" aria-hidden="true" style="left: -43px;"><div class="CodeMirror-linenumber CodeMirror-gutter-elt" style="left: 0px; width: 34px;">45</div></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">    <span class="cm-variable-2">--border</span>: <span class="cm-atom">#d0d0e0</span>;</span></pre></div><div style="position: relative;"><div class="CodeMirror-gutter-wrapper" aria-hidden="true" style="left: -43px;"><div class="CodeMirror-linenumber CodeMirror-gutter-elt" style="left: 0px; width: 34px;">46</div></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">    <span class="cm-variable-2">--text</span>: <span class="cm-atom">#1a1a2e</span>;</span></pre></div><div style="position: relative;"><div class="CodeMirror-gutter-wrapper" aria-hidden="true" style="left: -43px;"><div class="CodeMirror-linenumber CodeMirror-gutter-elt" style="left: 0px; width: 34px;">47</div></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">    <span class="cm-variable-2">--text2</span>: <span class="cm-atom">#666688</span>;</span></pre></div></div></div></div></div></div><div style="position: absolute; height: 35px; width: 1px; border-bottom: 0px solid transparent; top: 24872px;"></div><div class="CodeMirror-gutters" style="height: 24907px; left: 0px;"><div class="CodeMirror-gutter CodeMirror-foldgutter"></div><div class="CodeMirror-gutter CodeMirror-linenumbers" style="width: 42px;"></div></div></div></div>
     </div>
   </div>
 </div>
@@ -420,9 +402,9 @@ const LANG_INFO = {
 // ============================================================
 const EXAMPLES = {
   hello: {
-    python: 'print("Hello, World!")\nprint(f"你好, {input(\"请输入名字: \")}")',
+    python: 'print("Hello, World!")\nname = input("请输入名字: ")\nprint(f"你好, {name}")',
     javascript: 'console.log("Hello, World!");\nconst name = prompt("请输入名字: ");\nconsole.log(`你好, ${name}`);',
-    java: 'public class Main {\n  public static void main(String[] args) {\n    System.out.println("Hello, World!");\n    System.out.print("请输入名字: ");\n    var sc = new java.util.Scanner(System.in);\n    var name = sc.nextLine();\n    System.out.println("你好, " + name);\n  }\n}',
+    java: 'public class Main {\n  public static void main(String[] args) {\n    System.out.println("Hello, World!");\n    var sc = new java.util.Scanner(System.in);\n    var name = sc.nextLine();\n    System.out.println("你好, " + name);\n  }\n}',
     cpp: '#include <iostream>\n#include <string>\nint main() {\n  std::cout << "Hello, World!" << std::endl;\n  std::string name;\n  std::cout << "请输入名字: ";\n  std::cin >> name;\n  std::cout << "你好, " << name << std::endl;\n  return 0;\n}',
     typescript: 'function greet(name: string): void {\n  console.log(`Hello, ${name}!`);\n}\ngreet("World");',
     go: 'package main\nimport "fmt"\nfunc main() {\n  fmt.Println("Hello, World!")\n  var name string\n  fmt.Print("请输入名字: ")\n  fmt.Scan(&name)\n  fmt.Printf("你好, %s\\n", name)\n}',
@@ -441,7 +423,7 @@ const EXAMPLES = {
     java: 'public class Main {\n  public static void main(String[] args) {\n    var dog = new Dog("Buddy");\n    System.out.println(dog.speak());\n  }\n}\n\nclass Animal {\n  protected String name;\n  Animal(String name) { this.name = name; }\n  String speak() { return name + " makes a sound"; }\n}\n\nclass Dog extends Animal {\n  Dog(String name) { super(name); }\n  @Override String speak() { return name + " barks"; }\n}',
     cpp: '#include <iostream>\n#include <string>\nclass Animal {\nprotected:\n  std::string name;\npublic:\n  Animal(std::string n) : name(n) {}\n  virtual std::string speak() { return name + " makes a sound"; }\n};\nclass Dog : public Animal {\npublic:\n  Dog(std::string n) : Animal(n) {}\n  std::string speak() override { return name + " barks"; }\n};\nint main() {\n  Dog dog("Buddy");\n  std::cout << dog.speak() << std::endl;\n  return 0;\n}',
     typescript: 'class Animal {\n  constructor(public name: string) {}\n  speak(): string {\n    return `${this.name} makes a sound`;\n  }\n}\n\nclass Dog extends Animal {\n  speak(): string {\n    return `${this.name} barks`;\n  }\n}\n\nconst dog = new Dog("Buddy");\nconsole.log(dog.speak());',
-    go: 'package main\nimport "fmt"\ntype Animal struct {\n  name string\n}\nfunc (a Animal) Speak() string {\n  return a.name + " makes a sound"\n}\ntype Dog struct {\n  Animal\n}\nfunc (d Dog) Speak() string {\n  return d.name + " barks"\n}\nfunc main() {\n  dog := Dog{Animal{name: "Buddy"}}\n  fmt.Println(dog.Speak())\n}',
+    go: 'package main\nimport "fmt"\ntype Animal struct {\n  name string\n}\nfunc (a Animal) Speak() string { return a.name + " makes a sound" }\ntype Dog struct{ Animal }\nfunc (d Dog) Speak() string { return d.name + " barks" }\nfunc main() {\n  dog := Dog{Animal{name: "Buddy"}}\n  fmt.Println(dog.Speak())\n}',
   },
   sort: {
     python: 'def bubble_sort(arr):\n  n = len(arr)\n  for i in range(n):\n    for j in range(0, n-i-1):\n      if arr[j] > arr[j+1]:\n        arr[j], arr[j+1] = arr[j+1], arr[j]\n  return arr\n\nnums = [64, 34, 25, 12, 22, 11, 90]\nprint(bubble_sort(nums))',
@@ -454,127 +436,85 @@ const EXAMPLES = {
 };
 
 // ============================================================
-// 转换引擎
+// 转换引擎 — 已修复：支持中文全角引号、Unicode 字符
 // ============================================================
 const CONVERTERS = {
   // ---- Python -> JavaScript ----
   python_javascript(code) {
     let r = code;
-    // 注释
     r = r.replace(/# (.*)/g, '// $1');
-    // 函数定义 def -> function
     r = r.replace(/def\s+(\w+)\s*\(([^)]*)\)\s*:/g, 'function $1($2) {');
-    // print -> console.log
     r = r.replace(/print\s*\(([^)]*)\)/g, 'console.log($1);');
-    // input -> prompt
     r = r.replace(/input\s*\(([^)]*)\)/g, 'prompt($1)');
-    // elif -> else if
     r = r.replace(/elif\s+/g, '} else if ');
-    // else:
     r = r.replace(/else\s*:/g, '} else {');
-    // if / while / for 条件后的冒号
     r = r.replace(/(\b(?:if|while|for)\s*\([^)]*\))\s*:/g, '$1 {');
     r = r.replace(/(\b(?:if|while|for)\s[^:]+):/g, '$1 {');
-    // range(n) -> Array.from({length:n},(_,i)=>i)
     r = r.replace(/range\s*\(\s*(\d+)\s*\)/g, (_,n) => `Array.from({length:${n}},(_,i)=>i)`);
     r = r.replace(/range\s*\(\s*(\w+)\s*\)/g, (_,v) => `Array.from({length:${v}},(_,i)=>i)`);
-    // len(x) -> x.length
     r = r.replace(/\blen\s*\(([^)]*)\)/g, '$1.length');
-    // str() / int() 等类型转换保留
-    // self.xxx -> this.xxx
     r = r.replace(/self\./g, 'this.');
-    // __init__ -> constructor
     r = r.replace(/\b__init__\b/g, 'constructor');
-    // class 定义
     r = r.replace(/class\s+(\w+)\s*\(([^)]*)\)\s*:/g, 'class $1 extends $2 {');
     r = r.replace(/class\s+(\w+)\s*:/g, 'class $1 {');
-    // True/False/None -> true/false/null
     r = r.replace(/\bTrue\b/g, 'true');
     r = r.replace(/\bFalse\b/g, 'false');
     r = r.replace(/\bNone\b/g, 'null');
-    // and/or/not -> &&/||/!
     r = r.replace(/\band\b/g, '&&');
     r = r.replace(/\bor\b/g, '||');
     r = r.replace(/\bnot\s+/g, '!');
-    // append -> push
     r = r.replace(/\.append\s*\(/g, '.push(');
-    // del x[i] -> delete x[i] 或 splice
     r = r.replace(/del\s+(\w+)\[([^\]]+)\]/g, 'delete $1[$2]');
-    // in -> includes (简化)
     r = r.replace(/(\w+)\s+in\s+(\w+)/g, (m,a,b) => `${b}.includes(${a})`);
-    // for x in y: -> for (let x of y) {
     r = r.replace(/for\s+(\w+)\s+in\s+(\w+)\s*\{/g, 'for (let $1 of $2) {');
-    // try/except -> try/catch
     r = r.replace(/except\s+(\w+)\s*:/g, 'catch ($1) {');
     r = r.replace(/except\s*:/g, 'catch {');
     r = r.replace(/try\s*:/g, 'try {');
-    // finally:
     r = r.replace(/finally\s*:/g, 'finally {');
-    // 列表推导 [x for x in y] -> Array.from(y).map(x=>x)
+    // 列表推导 [x for x in y] -> y.map(x=>x)
     r = r.replace(/\[(\w+)\s+for\s+\w+\s+in\s+(\w+)\]/g, (_,x,y) => `${y}.map(${x}=>${x})`);
-    // f-string "f..." -> 模板字符串
-    r = r.replace(/f(["'])`/g, '`');
-    r = r.replace(/f(["'])([^"']*)\1/g, '`$2`');
+    // f-string — 同时处理 ASCII 引号和全角引号 \u201C\u201D\u2018\u2019
+    r = r.replace(/f["\u201C\u201D]/g, '`');
+    r = r.replace(/f['\u2018\u2019]/g, '`');
+    r = r.replace(/\u201C/g, '`').replace(/\u201D/g, '`');
     return r;
   },
 
   // ---- JavaScript -> Python ----
   javascript_python(code) {
     let r = code;
-    // 单行注释
     r = r.replace(/\/\/\s*(.*)/g, '# $1');
-    // 多行注释 /**/ 基本保留
-    // console.log -> print
     r = r.replace(/console\.log\s*\(([^)]*)\)/g, 'print($1)');
-    // prompt -> input
     r = r.replace(/prompt\s*\(([^)]*)\)/g, 'input($1)');
-    // function -> def
     r = r.replace(/function\s+(\w+)\s*\(([^)]*)\)\s*\{/g, 'def $1($2):');
-    // 箭头函数 (x)=> 转为 def
     r = r.replace(/(\w+)\s*=\s*\(([^)]*)\)\s*=>\s*\{/g, 'def $1($2):');
-    // const/let/var -> 无
     r = r.replace(/\b(const|let|var)\s+/g, '');
-    // === / !== -> == / !=
     r = r.replace(/===/g, '==');
     r = r.replace(/!==/g, '!=');
-    // this. -> self.
     r = r.replace(/this\./g, 'self.');
-    // constructor -> __init__
     r = r.replace(/\bconstructor\b/g, '__init__');
-    // class extends
     r = r.replace(/class\s+(\w+)\s+extends\s+(\w+)\s*\{/g, 'class $1($2):');
     r = r.replace(/class\s+(\w+)\s*\{/g, 'class $1:');
-    // true/false/null
     r = r.replace(/\btrue\b/g, 'True');
     r = r.replace(/\bfalse\b/g, 'False');
     r = r.replace(/\bnull\b/g, 'None');
-    // && / || / !
     r = r.replace(/&&/g, 'and');
     r = r.replace(/\|\|/g, 'or');
-    // ! 需要小心处理
     r = r.replace(/!\s*(\w+)/g, 'not $1');
-    // .push -> .append
     r = r.replace(/\.push\s*\(/g, '.append(');
-    // .length -> len()
     r = r.replace(/(\w+)\.length\b/g, 'len($1)');
-    // .includes -> in
     r = r.replace(/(\w+)\.includes\(([^)]*)\)/g, '$2 in $1');
-    // for...of -> for...in
     r = r.replace(/for\s*\(let\s+(\w+)\s+of\s+(\w+)\)\s*\{/g, 'for $1 in $2:');
-    // try/catch
     r = r.replace(/try\s*\{/g, 'try:');
     r = r.replace(/catch\s*\(([^)]*)\)\s*\{/g, 'except $1:');
     r = r.replace(/catch\s*\{/g, 'except:');
-    // else if -> elif
     r = r.replace(/}\s*else\s+if\s*\(/g, 'elif ');
-    // 移除末尾的分号
     r = r.replace(/;\s*$/gm, '');
-    // 模板字符串 -> f-string
+    // 模板字符串 -> f-string（保留中文全角反引号？通常不会出现）
     r = r.replace(/`([^`]*)`/g, (m, s) => {
       let fs = s.replace(/\$\{([^}]+)\}/g, '{$1}');
       return fs.includes('{') ? `f"${fs}"` : `"${fs}"`;
     });
-    // new Xxx() 保留但去掉 new
     r = r.replace(/\bnew\s+/g, '');
     return r;
   },
@@ -583,16 +523,12 @@ const CONVERTERS = {
   python_java(code) {
     let r = code;
     const lines = r.split('\n');
-    // 简单封装: 检测是否有类定义, 否则包一层
     let hasClass = /^\s*class\s+\w+/m.test(r);
     let hasDef = /^\s*def\s+\w+/m.test(r);
     let result = [];
     let indent = 0;
-
     if (hasDef && !hasClass) {
       result.push('public class Main {');
-      // 处理函数和代码
-      let inMain = false;
       for (let i = 0; i < lines.length; i++) {
         let line = lines[i];
         let trimmed = line.trim();
@@ -605,9 +541,7 @@ const CONVERTERS = {
               return `int ${p}`;
             }).filter(Boolean).join(', ');
             result.push(`  public static void ${m[1]}(${ps || 'String[] args'}) {`);
-            // 处理函数体
             indent = 2;
-            inMain = m[1] === 'main' || m[1] === 'main';
             continue;
           }
         }
@@ -616,25 +550,20 @@ const CONVERTERS = {
           result.push(`${'  '.repeat(indent)}System.out.println(${arg});`);
           continue;
         }
-        if (trimmed) {
-          result.push(`${'  '.repeat(indent)}${trimmed}`);
-        } else {
-          result.push('');
-        }
+        result.push(trimmed ? `${'  '.repeat(indent)}${trimmed}` : '');
       }
       result.push('}');
       r = result.join('\n');
     } else {
-      // 基本替换
       r = r.replace(/# (.*)/g, '// $1');
       r = r.replace(/print\s*\(([^)]*)\)/g, 'System.out.println($1);');
       r = r.replace(/self\./g, 'this.');
       r = r.replace(/\bTrue\b/g, 'true');
       r = r.replace(/\bFalse\b/g, 'false');
       r = r.replace(/\bNone\b/g, 'null');
-      r = r.replace(/and\b/g, '&&');
-      r = r.replace(/or\b/g, '||');
-      r = r.replace(/not\s+/g, '!');
+      r = r.replace(/\band\b/g, '&&');
+      r = r.replace(/\bor\b/g, '||');
+      r = r.replace(/\bnot\s+/g, '!');
     }
     return r;
   },
@@ -667,63 +596,168 @@ const CONVERTERS = {
 
   // ---- Python -> C++ ----
   python_cpp(code) {
-    let r = code;
-    let hasPrint = /print\s*\(/.test(r);
-    let hasDef = /def\s+/.test(r);
-    let result = [];
-    if (hasPrint || hasDef) {
-      result.push('#include <iostream>');
-      result.push('#include <string>');
-      result.push('#include <vector>');
-      result.push('using namespace std;');
-      result.push('');
-    }
-    let lines = r.split('\n');
-    for (let line of lines) {
-      let t = line.trim();
-      if (!t || t.startsWith('#')) {
-        if (t.startsWith('#')) result.push('// ' + t.slice(1).trim());
-        else result.push('');
+    // 行级处理：先分离函数定义和顶层代码，最终组装
+    let lines = code.split('\n');
+    let nonEmpty = lines.filter(l => l.trim() && !l.trim().startsWith('#'));
+    if (nonEmpty.length === 0) return '';
+
+    let hasMainDef = nonEmpty.some(l => /^\s*def\s+main\s*\(/.test(l));
+    let funcs = [];           // {type:'func', name, params, bodyLines[], indent}
+    let topLevel = [];        // {line, indent}
+    let currentFunc = null;   // 当前正在解析的函数
+    let classes = [];
+
+    // 第一遍：识别函数和顶层代码
+    for (let i = 0; i < lines.length; i++) {
+      let raw = lines[i];
+      let t = raw.trim();
+      let indent = raw.length - raw.trimStart().length;
+      if (!t) {
+        if (currentFunc) currentFunc.bodyLines.push(raw);
+        else if (i > 0 && i < lines.length - 1) topLevel.push({ line: raw, indent });
         continue;
       }
-      let m = t.match(/def\s+(\w+)\s*\(([^)]*)\)\s*:/);
-      if (m) {
+      if (t.startsWith('#')) { continue; }
+
+      if (/^def\s+(\w+)\s*\(([^)]*)\)\s*:/.test(t)) {
+        if (currentFunc) {
+          funcs.push(currentFunc);
+        }
+        let m = t.match(/^def\s+(\w+)\s*\(([^)]*)\)\s*:/);
         let params = m[2].split(',').map(s => s.trim()).filter(p => p && p !== 'self');
-        let ps = params.map(p => `int ${p}`).join(', ');
-        result.push(`void ${m[1]}(${ps}) {`);
+        let ps = params.map(p => {
+          if (/^[0-9]/.test(p) || /^".*"$/.test(p) || !/^[a-zA-Z_]/.test(p)) return null;
+          return `int ${p}`;
+        }).filter(Boolean).join(', ');
+        currentFunc = { name: m[1], params: ps, bodyLines: [], indent, isMain: m[1] === 'main' };
         continue;
       }
-      let pm = t.match(/print\s*\(([^)]*)\)/);
-      if (pm) {
-        let arg = pm[1].replace(/f"/g, '"');
-        result.push(`  cout << ${arg} << endl;`);
+      if (/^class\s+/.test(t) && currentFunc) {
+        funcs.push(currentFunc);
+        currentFunc = null;
+        classes.push({ line: raw, indent });
         continue;
       }
-      if (/^class\s+/.test(t)) {
-        let cm = t.match(/class\s+(\w+)\s*(?:\(([^)]*)\))?\s*:/);
-        if (cm) {
-          let parent = cm[2] ? ` : public ${cm[2]}` : '';
-          result.push(`class ${cm[1]}${parent} {`);
-          result.push('public:');
-          continue;
+      if (currentFunc) {
+        if (indent > currentFunc.indent) {
+          currentFunc.bodyLines.push(raw);
+        } else {
+          // 缩进回到函数定义级别 → 函数结束
+          funcs.push(currentFunc);
+          currentFunc = null;
+          topLevel.push({ line: raw, indent });
+        }
+      } else {
+        topLevel.push({ line: raw, indent });
+      }
+    }
+    if (currentFunc) funcs.push(currentFunc);
+
+    let out = [];
+    out.push('#include <iostream>', '#include <string>', '#include <vector>', 'using namespace std;', '');
+
+    // 输出函数定义
+    for (let f of funcs) {
+      let retType = f.isMain ? 'int' : 'void';
+      out.push(`${retType} ${f.name}(${f.params || ''}) {`);
+      for (let line of f.bodyLines) {
+        let tl = line.trim();
+        if (!tl) { out.push(''); continue; }
+        if (tl.startsWith('#')) { out.push('  // ' + tl.slice(1).trim()); continue; }
+        out.push('  ' + convertCppLine(tl, 1));
+      }
+      if (f.isMain) out.push('  return 0;');
+      out.push('}');
+      out.push('');
+    }
+
+    // 顶层代码 → 包装到 int main
+    if (topLevel.length > 0 && !hasMainDef) {
+      out.push('int main() {');
+      for (let item of topLevel) {
+        let tl = item.line.trim();
+        if (!tl) { out.push(''); continue; }
+        if (tl.startsWith('#')) { out.push('  // ' + tl.slice(1).trim()); continue; }
+        out.push('  ' + convertCppLine(tl, 1));
+      }
+      out.push('  return 0;');
+      out.push('}');
+    } else if (hasMainDef && topLevel.length > 0) {
+      for (let i = 0; i < funcs.length; i++) {
+        if (funcs[i].isMain) {
+          for (let item of topLevel) {
+            let tl = item.line.trim();
+            if (tl && !tl.startsWith('#')) {
+              funcs[i].bodyLines.push(item.line);
+            }
+          }
+          break;
         }
       }
-      if (/return\s+/.test(t)) result.push('  ' + t + ';');
-      else if (/for\s+/.test(t)) {
-        let fm = t.match(/for\s+(\w+)\s+in\s+range\((\d+)\)/);
-        if (fm) result.push(`  for (int ${fm[1]} = 0; ${fm[1]} < ${fm[2]}; ${fm[1]}++) {`);
-        else result.push('  ' + t.replace(/:/g, ' {'));
-      } else if (/if\s+/.test(t) || /else/.test(t)) {
-        result.push('  ' + t.replace(/:/g, ' {'));
-      } else {
-        result.push('  ' + t);
+      out.length = 0;
+      out.push('#include <iostream>', '#include <string>', '#include <vector>', 'using namespace std;', '');
+      for (let f of funcs) {
+        let retType = f.isMain ? 'int' : 'void';
+        out.push(`${retType} ${f.name}(${f.params || ''}) {`);
+        for (let line of f.bodyLines) {
+          let tl = line.trim();
+          if (!tl) { out.push(''); continue; }
+          if (tl.startsWith('#')) { out.push('  // ' + tl.slice(1).trim()); continue; }
+          out.push('  ' + convertCppLine(tl, 1));
+        }
+        if (f.isMain) out.push('  return 0;');
+        out.push('}');
+        out.push('');
       }
     }
-    r = result.join('\n');
+
+    function convertCppLine(line, depth) {
+      let t = line.trim();
+      let ind = '  '.repeat(depth);
+      // print()
+      let pm = t.match(/^print\s*\(([^)]*)\)/);
+      if (pm) {
+        let arg = pm[1].replace(/f["\u201C\u201D]/g, '"');
+        return `${ind}cout << ${arg} << endl;`;
+      }
+      // for in range
+      let fm = t.match(/^for\s+(\w+)\s+in\s+range\((\d+)\)/);
+      if (fm) {
+        return `${ind}for (int ${fm[1]} = 0; ${fm[1]} < ${fm[2]}; ${fm[1]}++) {`;
+      }
+      // for in iterable
+      let fm2 = t.match(/^for\s+(\w+)\s+in\s+(\w+)/);
+      if (fm2) {
+        return `${ind}for (int ${fm2[1]} : ${fm2[2]}) {`;
+      }
+      // if / elif / else
+      if (/^if\s+/.test(t)) {
+        return `${ind}${t.replace(/:\s*$/, ' {')}`;
+      }
+      if (/^elif\s+/.test(t)) {
+        return `${ind}} else ${t.replace(/^elif/, 'if').replace(/:\s*$/, ' {')}`;
+      }
+      if (/^else\s*:/.test(t)) {
+        return `${ind}} else {`;
+      }
+      // while
+      if (/^while\s+/.test(t)) {
+        return `${ind}${t.replace(/:\s*$/, ' {')}`;
+      }
+      // return
+      if (/^return\s+/.test(t)) {
+        return `${ind}${t};`;
+      }
+      // 普通语句
+      return `${ind}${t};`;
+    }
+
+    r = out.join('\n');
     r = r.replace(/\bTrue\b/g, 'true');
     r = r.replace(/\bFalse\b/g, 'false');
     r = r.replace(/\bNone\b/g, 'nullptr');
     r = r.replace(/self\./g, 'this->');
+    r = r.replace(/\n{3,}/g, '\n\n');
     return r;
   },
 
@@ -731,8 +765,8 @@ const CONVERTERS = {
   cpp_python(code) {
     let r = code;
     r = r.replace(/\/\/\s*(.*)/g, '# $1');
-    r = r.replace(/cout\s*<<\s*([^;]*?)\s*<<\s*endl/g, 'print($1)');
-    r = r.replace(/cout\s*<<\s*([^;]*)/g, 'print($1)');
+    r = r.replace(/cout\s*<<\s*(.*?)\s*<<\s*endl/g, 'print($1)');
+    r = r.replace(/cout\s*<<\s*(.*?)\s*;/g, 'print($1)');
     r = r.replace(/cin\s*>>\s*(\w+)/g, '$1 = int(input())');
     r = r.replace(/#include\s*<[^>]+>/g, '');
     r = r.replace(/using namespace std;/g, '');
@@ -744,18 +778,15 @@ const CONVERTERS = {
     r = r.replace(/\bfalse\b/g, 'False');
     r = r.replace(/\bnullptr\b/g, 'None');
     r = r.replace(/this->/g, 'self.');
-    r = r.replace(/public:/g, '');
-    r = r.replace(/private:/g, '');
-    r = r.replace(/protected:/g, '');
+    r = r.replace(/public:|private:|protected:/g, '');
     r = r.replace(/virtual\s+/g, '');
-    r = r.replace(/override\b/g, '');
+    r = r.replace(/\boverride\b/g, '');
     r = r.replace(/std::/g, '');
-    // 清理多余空行
     r = r.replace(/\n{3,}/g, '\n\n');
     return r.trim();
   },
 
-  // ---- JS -> TS (加类型) ----
+  // ---- JS -> TS ----
   javascript_typescript(code) {
     let r = code;
     r = r.replace(/function\s+(\w+)\s*\(([^)]*)\)\s*\{/g, (m,name,params) => {
@@ -767,7 +798,7 @@ const CONVERTERS = {
     return r;
   },
 
-  // ---- TS -> JS (去类型) ----
+  // ---- TS -> JS ----
   typescript_javascript(code) {
     let r = code;
     r = r.replace(/:\s*(\w+)(\s*[=,)\]])/g, '$2');
@@ -796,22 +827,18 @@ const CONVERTERS = {
       if (m) {
         let params = m[2].split(',').map(s => s.trim()).filter(p => p && p !== 'self');
         let ps = params.map(p => `${p} int`).join(', ');
-        let ret = m[1] === 'main' ? '' : ' int';
-        result.push(`func ${m[1]}(${ps})${ret} {`);
+        result.push(`func ${m[1]}(${ps}) int {`);
         if (m[1] === 'main') hasMain = true;
         continue;
       }
       let pm = t.match(/print\s*\(([^)]*)\)/);
       if (pm) {
-        let arg = pm[1].replace(/f"/g, '"');
+        let arg = pm[1].replace(/f["\u201C\u201D]/g, '"');
         if (/,$/.test(arg)) arg = arg.slice(0, -1);
         result.push(`\tfmt.Println(${arg})`);
         continue;
       }
-      if (/^class\s+/.test(t)) {
-        result.push('// ' + t);
-        continue;
-      }
+      if (/^class\s+/.test(t)) { result.push('// ' + t); continue; }
       if (/^for\s+/.test(t)) {
         let fm = t.match(/for\s+(\w+)\s+in\s+range\((\d+)\)/);
         if (fm) result.push(`\tfor ${fm[1]} := 0; ${fm[1]} < ${fm[2]}; ${fm[1]}++ {`);
@@ -822,29 +849,13 @@ const CONVERTERS = {
         }
         continue;
       }
-      if (/^if\s+/.test(t)) {
-        result.push('\t' + t.replace(/:/g, ' {'));
-        continue;
-      }
-      if (/^else\s*:/.test(t)) {
-        result.push('\t} else {');
-        continue;
-      }
-      if (/^elif\s+/.test(t)) {
-        result.push('\t} else ' + t.replace(/^elif/, 'if').replace(/:/g, ' {'));
-        continue;
-      }
-      if (/return\s+/.test(t)) {
-        result.push('\t' + t);
-        continue;
-      }
+      if (/^if\s+/.test(t)) { result.push('\t' + t.replace(/:/g, ' {')); continue; }
+      if (/^else\s*:/.test(t)) { result.push('\t} else {'); continue; }
+      if (/^elif\s+/.test(t)) { result.push('\t} else ' + t.replace(/^elif/, 'if').replace(/:/g, ' {')); continue; }
+      if (/return\s+/.test(t)) { result.push('\t' + t); continue; }
       result.push('\t' + t);
     }
-    if (!hasMain) {
-      result.push('func main() {');
-      result.push('\t// TODO');
-      result.push('}');
-    }
+    if (!hasMain) result.push('func main() {', '\t// TODO', '}');
     r = result.join('\n');
     r = r.replace(/\bTrue\b/g, 'true');
     r = r.replace(/\bFalse\b/g, 'false');
@@ -880,34 +891,17 @@ const CONVERTERS = {
     return r.trim();
   },
 
-  // 通用 fallback
   fallback(code, from, to) {
-    let r = code;
-    // 尝试基本的注释转换
-    if (from === 'python') r = r.replace(/# (.*)/g, '// $1');
-    else r = r.replace(/\/\/\s*(.*)/g, '# $1');
     return `// 转换 ${from} -> ${to} 暂不支持完整规则\n// 以下为原始代码:\n\n${code}`;
   }
 };
 
-// ============================================================
-// 核心转换函数
-// ============================================================
 function convertCode(code, from, to) {
   if (!code.trim()) return '';
   const key = `${from}_${to}`;
   if (CONVERTERS[key]) {
-    try {
-      return CONVERTERS[key](code);
-    } catch (e) {
-      return `// 转换出错: ${e.message}\n\n${code}`;
-    }
-  }
-  // 尝试反向转换
-  const reverseKey = `${to}_${from}`;
-  if (CONVERTERS[reverseKey]) {
-    // 已经在目标中有转换器，但方向不对
-    return CONVERTERS.fallback(code, from, to);
+    try { return CONVERTERS[key](code); }
+    catch (e) { return `// 转换出错: ${e.message}\n\n${code}`; }
   }
   return CONVERTERS.fallback(code, from, to);
 }
@@ -927,61 +921,37 @@ const convertBtn = document.getElementById('convertBtn');
 const themeToggle = document.getElementById('themeToggle');
 let isConverting = false;
 
-// ---- CodeMirror 模式映射 ----
 const CM_MODE = {
-  python: 'python',
-  javascript: 'javascript',
-  java: 'text/x-java',
-  cpp: 'text/x-c++src',
-  typescript: 'text/typescript',
-  go: 'go',
+  python: 'python', javascript: 'javascript', java: 'text/x-java',
+  cpp: 'text/x-c++src', typescript: 'text/typescript', go: 'go',
 };
 
-// ---- CodeMirror 编辑器实例 ----
 const sourceEditor = CodeMirror.fromTextArea(document.getElementById('sourceCode'), {
   mode: CM_MODE[fromLang.value],
-  lineNumbers: true,
-  matchBrackets: true,
-  indentUnit: 2,
-  tabSize: 2,
-  lineWrapping: false,
-  foldGutter: true,
-  gutters: ['CodeMirror-foldgutter', 'CodeMirror-linenumbers'],
-  styleActiveLine: true,
-  placeholder: '在此粘贴源代码...',
+  lineNumbers: true, matchBrackets: true,
+  indentUnit: 2, tabSize: 2, lineWrapping: false,
+  foldGutter: true, gutters: ['CodeMirror-foldgutter', 'CodeMirror-linenumbers'],
+  styleActiveLine: true, placeholder: '在此粘贴源代码...',
 });
 
 const resultEditor = CodeMirror.fromTextArea(document.getElementById('resultCode'), {
   mode: CM_MODE[toLang.value],
-  lineNumbers: true,
-  matchBrackets: true,
-  indentUnit: 2,
-  tabSize: 2,
-  lineWrapping: false,
+  lineNumbers: true, matchBrackets: true,
+  indentUnit: 2, tabSize: 2, lineWrapping: false,
   readOnly: true,
-  foldGutter: true,
-  gutters: ['CodeMirror-foldgutter', 'CodeMirror-linenumbers'],
+  foldGutter: true, gutters: ['CodeMirror-foldgutter', 'CodeMirror-linenumbers'],
   placeholder: '转换后的代码将显示在此处...',
 });
 
-// 切换语言时同步 CodeMirror mode
-function syncSourceMode() {
-  sourceEditor.setOption('mode', CM_MODE[fromLang.value]);
-}
-function syncResultMode() {
-  resultEditor.setOption('mode', CM_MODE[toLang.value]);
-}
+function syncSourceMode() { sourceEditor.setOption('mode', CM_MODE[fromLang.value]); }
+function syncResultMode() { resultEditor.setOption('mode', CM_MODE[toLang.value]); }
 
-// ---- 主题切换 ----
 function setTheme(theme) {
   document.body.classList.toggle('light', theme === 'light');
   themeToggle.textContent = theme === 'light' ? '\u2600' : '\u263E';
   try { localStorage.setItem('code-converter-theme', theme); } catch {}
 }
-function toggleTheme() {
-  const isLight = document.body.classList.contains('light');
-  setTheme(isLight ? 'dark' : 'light');
-}
+function toggleTheme() { setTheme(document.body.classList.contains('light') ? 'dark' : 'light'); }
 try {
   const saved = localStorage.getItem('code-converter-theme');
   if (saved) setTheme(saved);
@@ -989,72 +959,53 @@ try {
 } catch {}
 
 function updateLabels() {
-  const fi = LANG_INFO[fromLang.value];
-  const ti = LANG_INFO[toLang.value];
-  fromLabel.textContent = fi.name;
-  toLabel.textContent = ti.name;
+  fromLabel.textContent = LANG_INFO[fromLang.value].name;
+  toLabel.textContent = LANG_INFO[toLang.value].name;
 }
-
 function updateStats() {
-  const sl = sourceEditor.lineCount();
-  const tl = resultEditor.lineCount();
-  fromStats.textContent = `${sl} 行`;
-  toStats.textContent = `${tl} 行`;
+  fromStats.textContent = `${sourceEditor.lineCount()} 行`;
+  toStats.textContent = `${resultEditor.lineCount()} 行`;
 }
-
 function showToast(msg) {
   const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.classList.add('show');
+  t.textContent = msg; t.classList.add('show');
   clearTimeout(t._timer);
   t._timer = setTimeout(() => t.classList.remove('show'), 2000);
 }
+function updateConvertBtn() { convertBtn.disabled = !sourceEditor.getValue().trim(); }
 
 function doConvert() {
   if (isConverting) return;
-
   const code = sourceEditor.getValue();
   const from = fromLang.value;
   const to = toLang.value;
-
   if (!code.trim()) {
     resultEditor.setValue('');
-    statusMsg.textContent = '请先输入代码';
-    statusMsg.className = '';
-    updateStats();
-    return;
+    statusMsg.textContent = '请先输入代码'; statusMsg.className = '';
+    updateStats(); return;
   }
-
   isConverting = true;
   convertBtn.disabled = true;
   convertBtn.innerHTML = '<span class="spinner"></span> 转换中';
-  statusMsg.textContent = '转换中...';
-  statusMsg.className = '';
+  statusMsg.textContent = '转换中...'; statusMsg.className = '';
   const start = performance.now();
-
   setTimeout(() => {
     try {
       const result = convertCode(code, from, to);
       const elapsed = ((performance.now() - start) / 1000).toFixed(2);
-
       resultEditor.setValue(result);
       updateStats();
-
       if (from === to) {
         statusMsg.textContent = `提示: 源语言和目标语言相同 (${elapsed}s)`;
-        statusMsg.className = '';
       } else if (result.startsWith('// 转换')) {
-        statusMsg.textContent = `部分转换 (${elapsed}s)`;
-        statusMsg.className = 'error';
+        statusMsg.textContent = `部分转换 (${elapsed}s)`; statusMsg.className = 'error';
         showToast('该语言组合暂未实现完整转换规则');
       } else {
-        statusMsg.textContent = `转换完成 (${elapsed}s)`;
-        statusMsg.className = 'success';
+        statusMsg.textContent = `转换完成 (${elapsed}s)`; statusMsg.className = 'success';
       }
       statusExtra.textContent = `${result.split('\n').length} 行`;
     } catch (e) {
-      statusMsg.textContent = '转换失败';
-      statusMsg.className = 'error';
+      statusMsg.textContent = '转换失败'; statusMsg.className = 'error';
       showToast(`转换出错: ${e.message}`);
     } finally {
       isConverting = false;
@@ -1066,11 +1017,8 @@ function doConvert() {
 
 function swapLanguages() {
   const tmp = fromLang.value;
-  fromLang.value = toLang.value;
-  toLang.value = tmp;
-  updateLabels();
-  syncSourceMode();
-  syncResultMode();
+  fromLang.value = toLang.value; toLang.value = tmp;
+  updateLabels(); syncSourceMode(); syncResultMode();
   doConvert();
 }
 
@@ -1078,17 +1026,12 @@ function loadExample(name) {
   const from = fromLang.value;
   const ex = EXAMPLES[name];
   if (ex && ex[from]) {
-    sourceEditor.setValue(ex[from]);
-    updateStats();
-    doConvert();
+    sourceEditor.setValue(ex[from]); updateStats(); doConvert();
   } else {
     for (const lang of Object.keys(ex || {})) {
       sourceEditor.setValue(ex[lang]);
       fromLang.value = lang;
-      updateLabels();
-      syncSourceMode();
-      updateStats();
-      doConvert();
+      updateLabels(); syncSourceMode(); updateStats(); doConvert();
       return;
     }
     sourceEditor.setValue('// 该语言暂无示例');
@@ -1098,77 +1041,37 @@ function loadExample(name) {
 function copyResult() {
   const text = resultEditor.getValue();
   if (!text) { showToast('没有可复制的内容'); return; }
-  navigator.clipboard.writeText(text).then(() => {
-    showToast('已复制到剪贴板');
-  }).catch(() => {
-    const ta = document.createElement('textarea');
-    ta.value = text;
-    document.body.appendChild(ta);
-    ta.select();
-    document.execCommand('copy');
-    ta.remove();
-    showToast('已复制到剪贴板');
-  });
+  navigator.clipboard.writeText(text).then(() => showToast('已复制到剪贴板'))
+    .catch(() => { const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); showToast('已复制到剪贴板'); });
 }
 
-function updateConvertBtn() {
-  convertBtn.disabled = !sourceEditor.getValue().trim();
-}
-
-// ============================================================
-// 事件绑定
-// ============================================================
+// ---- 事件绑定 ----
 document.getElementById('convertBtn').addEventListener('click', doConvert);
 document.getElementById('swapBtn').addEventListener('click', swapLanguages);
 document.getElementById('themeToggle').addEventListener('click', toggleTheme);
 document.getElementById('clearBtn').addEventListener('click', () => {
-  sourceEditor.setValue('');
-  updateConvertBtn();
-  updateStats();
-  statusMsg.textContent = '已清空源码';
-  statusMsg.className = '';
-  statusExtra.textContent = '';
+  sourceEditor.setValue(''); updateConvertBtn(); updateStats();
+  statusMsg.textContent = '已清空源码'; statusMsg.className = ''; statusExtra.textContent = '';
 });
 document.getElementById('clearAllBtn').addEventListener('click', () => {
-  sourceEditor.setValue('');
-  resultEditor.setValue('');
-  updateConvertBtn();
-  updateStats();
-  statusMsg.textContent = '已清空全部';
-  statusMsg.className = '';
-  statusExtra.textContent = '';
+  sourceEditor.setValue(''); resultEditor.setValue(''); updateConvertBtn(); updateStats();
+  statusMsg.textContent = '已清空全部'; statusMsg.className = ''; statusExtra.textContent = '';
   showToast('已清空双编辑器');
 });
 document.getElementById('copyBtn').addEventListener('click', copyResult);
 
-fromLang.addEventListener('change', () => {
-  updateLabels();
-  syncSourceMode();
-  if (sourceEditor.getValue().trim()) doConvert();
-});
-toLang.addEventListener('change', () => {
-  updateLabels();
-  syncResultMode();
-  if (sourceEditor.getValue().trim()) doConvert();
-});
+fromLang.addEventListener('change', () => { updateLabels(); syncSourceMode(); if (sourceEditor.getValue().trim()) doConvert(); });
+toLang.addEventListener('change', () => { updateLabels(); syncResultMode(); if (sourceEditor.getValue().trim()) doConvert(); });
 
 sourceEditor.on('change', () => {
   updateConvertBtn();
   clearTimeout(sourceEditor._debounce);
-  sourceEditor._debounce = setTimeout(() => {
-    updateStats();
-    if (sourceEditor.getValue().trim()) doConvert();
-  }, 500);
+  sourceEditor._debounce = setTimeout(() => { updateStats(); if (sourceEditor.getValue().trim()) doConvert(); }, 500);
 });
 
-document.querySelectorAll('.chip').forEach(el => {
-  el.addEventListener('click', () => loadExample(el.dataset.example));
-});
+document.querySelectorAll('.chip').forEach(el => { el.addEventListener('click', () => loadExample(el.dataset.example)); });
 
-sourceEditor.setOption('extraKeys', {
-  'Ctrl-Enter': () => doConvert(),
-  'Cmd-Enter': () => doConvert(),
-});
+sourceEditor.setOption('extraKeys', { 'Ctrl-Enter': () => doConvert(), 'Cmd-Enter': () => doConvert() });
 
 // ---- 源码弹窗 ----
 let sourceModalEditor = null;
@@ -1180,54 +1083,28 @@ document.getElementById('viewSourceBtn').addEventListener('click', () => {
   ta.value = raw;
   if (!sourceModalEditor) {
     sourceModalEditor = CodeMirror.fromTextArea(ta, {
-      mode: 'htmlmixed',
-      lineNumbers: true,
-      matchBrackets: true,
-      readOnly: true,
-      lineWrapping: false,
-      foldGutter: true,
-      gutters: ['CodeMirror-foldgutter', 'CodeMirror-linenumbers'],
+      mode: 'htmlmixed', lineNumbers: true, matchBrackets: true,
+      readOnly: true, lineWrapping: false,
+      foldGutter: true, gutters: ['CodeMirror-foldgutter', 'CodeMirror-linenumbers'],
     });
   } else {
     sourceModalEditor.setValue(raw);
   }
   setTimeout(() => { sourceModalEditor.refresh(); sourceModalEditor.focus(); }, 50);
 });
-document.getElementById('modalCloseBtn').addEventListener('click', () => {
-  document.getElementById('sourceModal').classList.remove('open');
-});
-document.getElementById('sourceModal').addEventListener('click', (e) => {
-  if (e.target === e.currentTarget) {
-    document.getElementById('sourceModal').classList.remove('open');
-  }
-});
+document.getElementById('modalCloseBtn').addEventListener('click', () => { document.getElementById('sourceModal').classList.remove('open'); });
+document.getElementById('sourceModal').addEventListener('click', (e) => { if (e.target === e.currentTarget) document.getElementById('sourceModal').classList.remove('open'); });
 document.getElementById('modalCopyBtn').addEventListener('click', () => {
   const raw = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
-  navigator.clipboard.writeText(raw).then(() => {
-    showToast('已复制全部源码');
-  }).catch(() => {
-    const ta = document.createElement('textarea');
-    ta.value = raw;
-    document.body.appendChild(ta);
-    ta.select();
-    document.execCommand('copy');
-    ta.remove();
-    showToast('已复制全部源码');
-  });
+  navigator.clipboard.writeText(raw).then(() => showToast('已复制全部源码'))
+    .catch(() => { const ta = document.createElement('textarea'); ta.value = raw; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); showToast('已复制全部源码'); });
 });
-// Escape 关闭弹窗
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') {
-    document.getElementById('sourceModal').classList.remove('open');
-  }
-});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') document.getElementById('sourceModal').classList.remove('open'); });
 
 // 初始化
-updateLabels();
-updateStats();
-updateConvertBtn();
+updateLabels(); updateStats(); updateConvertBtn();
 statusMsg.textContent = '就绪';
 setTimeout(() => { sourceEditor.refresh(); resultEditor.refresh(); }, 100);
 </script>
-</body>
-</html>
+
+</body></html>
