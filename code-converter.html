@@ -1,0 +1,1111 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>编程语言转换器</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/codemirror.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/python/python.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/javascript/javascript.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/clike/clike.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/go/go.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/xml/xml.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/css/css.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/htmlmixed/htmlmixed.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/edit/matchbrackets.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/fold/foldcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/fold/foldgutter.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/fold/brace-fold.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/fold/indent-fold.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/fold/comment-fold.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/fold/xml-fold.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/selection/active-line.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/display/placeholder.min.js"></script>
+<style>
+  :root {
+    --bg: #0f0f1a;
+    --surface: #1a1a2e;
+    --surface2: #232344;
+    --border: #2a2a4a;
+    --text: #e0e0f0;
+    --text2: #8888aa;
+    --accent: #6c5ce7;
+    --accent2: #a29bfe;
+    --green: #00cec9;
+    --orange: #fd79a8;
+    --blue: #74b9ff;
+    --radius: 12px;
+    --font: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', monospace;
+    --toast-bg: var(--surface);
+  }
+  body.light {
+    --bg: #f0f0f8;
+    --surface: #ffffff;
+    --surface2: #e8e8f0;
+    --border: #d0d0e0;
+    --text: #1a1a2e;
+    --text2: #666688;
+    --toast-bg: #ffffff;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+  body, body::before, .editor-panel, .toolbar, .editor-header, .status-bar,
+  select, .theme-toggle, .toast, .CodeMirror, .CodeMirror-gutters, .CodeMirror-linenumber {
+    transition: background-color 0.35s ease, border-color 0.35s ease, color 0.35s ease, box-shadow 0.35s ease;
+  }
+  header {
+    padding: 20px 32px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  header h1 {
+    font-size: 22px;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--accent2), var(--green));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  header h1 span { font-size: 14px; -webkit-text-fill-color: var(--text2); font-weight: 400; margin-left: 8px; }
+  .header-actions { display: flex; gap: 10px; align-items: center; }
+  .badge {
+    font-size: 12px; padding: 4px 12px; border-radius: 20px;
+    background: var(--surface2); color: var(--text2); border: 1px solid var(--border);
+  }
+  .theme-toggle {
+    width: 36px; height: 36px; border-radius: 50%;
+    background: var(--surface2); border: 1px solid var(--border);
+    color: var(--text); cursor: pointer; font-size: 16px;
+    display: flex; align-items: center; justify-content: center;
+    transition: 0.2s;
+  }
+  .theme-toggle:hover { border-color: var(--accent); background: var(--surface); }
+  .container {
+    max-width: 1400px; margin: 0 auto; padding: 24px 32px;
+    flex: 1; width: 100%; display: flex; flex-direction: column; min-height: 0;
+  }
+  .editor-grid-wrap { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+  .editor-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 20px;
+    flex: 1; min-height: 0; grid-template-rows: 1fr;
+  }
+  @media (max-width: 900px) {
+    .editor-grid { grid-template-columns: 1fr; }
+    .container { padding: 16px; }
+    header { padding: 16px; }
+  }
+  .toolbar {
+    display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+    margin-bottom: 20px; padding: 16px; background: var(--surface);
+    border-radius: var(--radius); border: 1px solid var(--border);
+  }
+  .toolbar-group { display: flex; align-items: center; gap: 8px; }
+  .toolbar-group label { font-size: 13px; color: var(--text2); font-weight: 500; white-space: nowrap; }
+  select {
+    background: var(--surface2); color: var(--text); border: 1px solid var(--border);
+    padding: 8px 14px; border-radius: 8px; font-size: 13px; cursor: pointer;
+    outline: none; transition: 0.2s; font-family: inherit;
+  }
+  select:hover, select:focus { border-color: var(--accent); }
+  .btn {
+    padding: 8px 20px; border: none; border-radius: 8px; font-size: 13px; font-weight: 600;
+    cursor: pointer; transition: 0.15s; display: inline-flex; align-items: center; gap: 6px;
+    font-family: inherit; user-select: none;
+  }
+  .btn:active { transform: scale(0.96); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; }
+  .btn-primary {
+    background: linear-gradient(135deg, var(--accent), #8b7cf7);
+    color: #fff; box-shadow: 0 4px 15px rgba(108,92,231,0.3);
+  }
+  .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(108,92,231,0.4); }
+  .btn-secondary {
+    background: var(--surface2); color: var(--text); border: 1px solid var(--border);
+  }
+  .btn-secondary:hover { border-color: var(--accent); }
+  .btn-success {
+    background: linear-gradient(135deg, #00b894, #00cec9);
+    color: #fff; box-shadow: 0 4px 15px rgba(0,206,201,0.3);
+  }
+  .btn-success:hover { transform: translateY(-1px); }
+  .btn-icon { padding: 8px 12px; font-size: 16px; }
+  .editor-panel {
+    background: var(--surface); border-radius: var(--radius);
+    border: 1px solid var(--border); overflow: hidden;
+    display: flex; flex-direction: column; min-height: 0; height: 100%;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .editor-panel:hover { border-color: var(--accent); box-shadow: 0 0 0 1px rgba(108,92,231,0.08); }
+  .editor-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 16px; border-bottom: 1px solid var(--border);
+    background: var(--surface2);
+  }
+  .editor-header .lang-label {
+    font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px;
+  }
+  .lang-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  .editor-meta { font-size: 12px; color: var(--text2); display: flex; gap: 12px; }
+  .code-area {
+    position: relative; flex: 1; display: flex; flex-direction: column; min-height: 0;
+  }
+  .code-area .CodeMirror {
+    flex: 1; height: 100%; min-height: 420px;
+  }
+  .code-area .CodeMirror-scroll { min-height: 420px; }
+  .status-bar {
+    padding: 10px 16px; border-top: 1px solid var(--border);
+    font-size: 12px; color: var(--text2); display: flex; justify-content: space-between;
+  }
+  .status-bar .error { color: var(--orange); }
+  .status-bar .success { color: var(--green); }
+  .toast {
+    position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
+    padding: 12px 24px; border-radius: 8px; font-size: 14px;
+    background: var(--toast-bg); border: 1px solid var(--border);
+    color: var(--text); box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+    opacity: 0; transition: 0.3s; pointer-events: none; z-index: 100;
+  }
+  .toast.show { opacity: 1; }
+  .spinner {
+    display: inline-block; width: 16px; height: 16px;
+    border: 2px solid var(--text2); border-top-color: var(--accent);
+    border-radius: 50%; animation: spin 0.6s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .examples { display: flex; gap: 8px; flex-wrap: wrap; }
+  .examples .chip {
+    font-size: 12px; padding: 4px 12px; border-radius: 16px;
+    background: var(--surface2); color: var(--text2); border: 1px solid var(--border);
+    cursor: pointer; transition: 0.2s;
+  }
+  .examples .chip:hover { border-color: var(--accent); color: var(--accent2); }
+
+  /* CodeMirror 暗色主题 */
+  .CodeMirror {
+    font-family: var(--font); font-size: 14px; line-height: 1.6;
+    background: transparent; color: var(--text);
+  }
+  .CodeMirror-gutters {
+    background: var(--surface); border-right: 1px solid var(--border);
+  }
+  .CodeMirror-linenumber { color: var(--text2) !important; opacity: 0.5; }
+  .CodeMirror-cursor { border-left-color: var(--accent) !important; }
+  .CodeMirror-selected { background: rgba(108,92,231,0.15) !important; }
+  .CodeMirror-activeline-background { background: rgba(108,92,231,0.06) !important; }
+  .CodeMirror-matchingbracket {
+    background: rgba(0,206,201,0.15) !important;
+    border-bottom: 1px solid var(--green) !important;
+    color: var(--text) !important;
+  }
+  .CodeMirror-foldmarker { color: var(--text2); font-family: sans-serif; cursor: pointer; }
+  .CodeMirror-foldgutter-open, .CodeMirror-foldgutter-closed { cursor: pointer; color: var(--text2); opacity: 0.6; }
+  .cm-s-default .cm-keyword { color: #c792ea; }
+  .cm-s-default .cm-atom { color: #f78c6c; }
+  .cm-s-default .cm-number { color: #f78c6c; }
+  .cm-s-default .cm-def { color: #82aaff; }
+  .cm-s-default .cm-variable { color: var(--text); }
+  .cm-s-default .cm-variable-2 { color: #80cbc4; }
+  .cm-s-default .cm-variable-3 { color: #decb6b; }
+  .cm-s-default .cm-property { color: #80cbc4; }
+  .cm-s-default .cm-operator { color: #89ddff; }
+  .cm-s-default .cm-comment { color: #546e7a; font-style: italic; }
+  .cm-s-default .cm-string { color: #c3e88d; }
+  .cm-s-default .cm-string-2 { color: #f07178; }
+  .cm-s-default .cm-meta { color: #ffcb6b; }
+  .cm-s-default .cm-qualifier { color: #decb6b; }
+  .cm-s-default .cm-builtin { color: #82aaff; }
+  .cm-s-default .cm-bracket { color: var(--text2); }
+  .cm-s-default .cm-tag { color: #f07178; }
+  .cm-s-default .cm-attribute { color: #c792ea; }
+  .CodeMirror-placeholder { color: var(--text2) !important; opacity: 0.5 !important; }
+
+  /* 浅色主题 CodeMirror 覆盖 */
+  body.light .cm-s-default .cm-comment { color: #90a4ae; }
+  body.light .cm-s-default .cm-string { color: #6a8759; }
+  body.light .cm-s-default .cm-number { color: #ab6526; }
+  body.light .cm-s-default .cm-atom { color: #ab6526; }
+  body.light .cm-s-default .cm-keyword { color: #7b3ba7; }
+  body.light .cm-s-default .cm-def { color: #2f6f9f; }
+  body.light .cm-s-default .cm-variable-2 { color: #2f6f9f; }
+  body.light .cm-s-default .cm-variable-3 { color: #6f6f2f; }
+  body.light .cm-s-default .cm-property { color: #2f6f9f; }
+  body.light .cm-s-default .cm-operator { color: #5f5f5f; }
+  body.light .cm-s-default .cm-tag { color: #b52f2f; }
+  body.light .cm-s-default .cm-attribute { color: #7b3ba7; }
+
+  /* 源码弹窗 */
+  .modal-overlay {
+    position: fixed; inset: 0; z-index: 1000;
+    background: rgba(0,0,0,0.7);
+    display: flex; flex-direction: column;
+    visibility: hidden; opacity: 0;
+    transition: opacity 0.25s, visibility 0.25s;
+  }
+  .modal-overlay.open { visibility: visible; opacity: 1; }
+  .modal-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 24px; background: var(--surface);
+    border-bottom: 1px solid var(--border); flex-shrink: 0;
+  }
+  .modal-title { font-size: 15px; font-weight: 600; }
+  .modal-actions { display: flex; gap: 10px; }
+  .modal-body { flex: 1; min-height: 0; padding: 16px 24px 24px; display: flex; }
+  .modal-code-area { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+  .modal-code-area .CodeMirror {
+    flex: 1; height: 100%; border: 1px solid var(--border);
+    border-radius: 8px; overflow: hidden;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>&#x3C;/&#x3E; 编程语言转换器 <span>Code Converter</span></h1>
+  <div class="header-actions">
+    <div class="badge">v1.2</div>
+    <div class="badge">规则引擎</div>
+    <button class="theme-toggle" id="themeToggle" title="切换主题">&#x263E;</button>
+  </div>
+</header>
+
+<div class="container">
+  <div class="toolbar">
+    <div class="toolbar-group">
+      <label>源语言</label>
+      <select id="fromLang">
+        <option value="python">Python</option>
+        <option value="javascript">JavaScript</option>
+        <option value="java">Java</option>
+        <option value="cpp">C++</option>
+        <option value="typescript">TypeScript</option>
+        <option value="go">Go</option>
+      </select>
+    </div>
+    <div class="toolbar-group">
+      <label>目标语言</label>
+      <select id="toLang">
+        <option value="javascript">JavaScript</option>
+        <option value="python">Python</option>
+        <option value="java">Java</option>
+        <option value="cpp">C++</option>
+        <option value="typescript">TypeScript</option>
+        <option value="go">Go</option>
+      </select>
+    </div>
+    <button class="btn btn-primary" id="convertBtn">&#9654; 转换</button>
+    <button class="btn btn-secondary" id="swapBtn">&#8646; 互换</button>
+    <button class="btn btn-secondary" id="clearAllBtn">&#x1F5D1; 清空</button>
+    <button class="btn btn-secondary" id="viewSourceBtn">&#x1F4C4; 查看源码</button>
+    <div class="examples">
+      <span class="chip" data-example="hello">Hello World</span>
+      <span class="chip" data-example="fib">斐波那契</span>
+      <span class="chip" data-example="class">类定义</span>
+      <span class="chip" data-example="sort">排序算法</span>
+    </div>
+  </div>
+
+  <div class="editor-grid-wrap">
+    <div class="editor-grid">
+      <div class="editor-panel">
+        <div class="editor-header">
+          <span class="lang-label">
+            <span class="lang-dot" style="background:var(--blue)"></span>
+            <span id="fromLabel">Python</span>
+          </span>
+          <div class="editor-meta">
+            <span id="fromStats">0 行</span>
+            <button class="btn btn-secondary btn-icon" id="clearBtn" title="清空">&#x1F5D1;</button>
+          </div>
+        </div>
+        <div class="code-area">
+          <textarea id="sourceCode" placeholder="在此粘贴源代码..." spellcheck="false"></textarea>
+        </div>
+      </div>
+
+      <div class="editor-panel">
+        <div class="editor-header">
+          <span class="lang-label">
+            <span class="lang-dot" style="background:var(--green)"></span>
+            <span id="toLabel">JavaScript</span>
+          </span>
+          <div class="editor-meta">
+            <span id="toStats">0 行</span>
+            <button class="btn btn-secondary btn-icon" id="copyBtn" title="复制结果">&#x1F4CB;</button>
+          </div>
+        </div>
+        <div class="code-area">
+          <textarea id="resultCode" placeholder="转换后的代码将显示在此处..." spellcheck="false" readonly></textarea>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="status-bar">
+    <span id="statusMsg">就绪</span>
+    <span id="statusExtra"></span>
+  </div>
+  <div style="text-align:center;padding:16px 0 4px;font-size:12px;color:var(--text2);opacity:0.6;border-top:1px solid var(--border);margin-top:20px">
+    本工具所有代码转换运算在本地浏览器执行，不会上传您粘贴的代码至任何服务器。
+  </div>
+  <div style="text-align:center;padding:4px 0 4px;font-size:12px;color:var(--text2);opacity:0.5">
+    代码编辑器推荐本地安装 Cascadia Code / Fira Code / JetBrains Mono 获得最佳显示效果。
+  </div>
+  <div style="text-align:center;padding:4px 0 16px;font-size:12px;color:var(--orange);opacity:0.7">
+    &#x26A0;&#xFE0F; 自动代码转换结果仅作参考，请人工校验代码逻辑，工具不保证转换代码可直接运行。
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- 查看源码弹窗 -->
+<div class="modal-overlay" id="sourceModal">
+  <div class="modal-header">
+    <span class="modal-title">&#x1F4C4; 页面完整源码</span>
+    <div class="modal-actions">
+      <button class="btn btn-success" id="modalCopyBtn">&#x1F4CB; 一键复制全部源码</button>
+      <button class="btn btn-secondary" id="modalCloseBtn">&#x2715; 关闭</button>
+    </div>
+  </div>
+  <div class="modal-body">
+    <div class="modal-code-area">
+      <textarea id="modalSourceCode" spellcheck="false" readonly></textarea>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// 语言配色 & 名称
+// ============================================================
+const LANG_INFO = {
+  python:     { color: '#3572A5', name: 'Python' },
+  javascript: { color: '#f7df1e', name: 'JavaScript' },
+  java:       { color: '#b07219', name: 'Java' },
+  cpp:        { color: '#f34b7d', name: 'C++' },
+  typescript: { color: '#3178c6', name: 'TypeScript' },
+  go:         { color: '#00ADD8', name: 'Go' },
+};
+
+// ============================================================
+// 示例代码
+// ============================================================
+const EXAMPLES = {
+  hello: {
+    python: 'print("Hello, World!")\nname = input("请输入名字: ")\nprint(f"你好, {name}")',
+    javascript: 'console.log("Hello, World!");\nconst name = prompt("请输入名字: ");\nconsole.log(`你好, ${name}`);',
+    java: 'public class Main {\n  public static void main(String[] args) {\n    System.out.println("Hello, World!");\n    var sc = new java.util.Scanner(System.in);\n    var name = sc.nextLine();\n    System.out.println("你好, " + name);\n  }\n}',
+    cpp: '#include <iostream>\n#include <string>\nint main() {\n  std::cout << "Hello, World!" << std::endl;\n  std::string name;\n  std::cout << "请输入名字: ";\n  std::cin >> name;\n  std::cout << "你好, " << name << std::endl;\n  return 0;\n}',
+    typescript: 'function greet(name: string): void {\n  console.log(`Hello, ${name}!`);\n}\ngreet("World");',
+    go: 'package main\nimport "fmt"\nfunc main() {\n  fmt.Println("Hello, World!")\n  var name string\n  fmt.Print("请输入名字: ")\n  fmt.Scan(&name)\n  fmt.Printf("你好, %s\\n", name)\n}',
+  },
+  fib: {
+    python: 'def fibonacci(n):\n  if n <= 1:\n    return n\n  return fibonacci(n-1) + fibonacci(n-2)\n\nn = 10\nfor i in range(n):\n  print(fibonacci(i))',
+    javascript: 'function fibonacci(n) {\n  if (n <= 1) return n;\n  return fibonacci(n-1) + fibonacci(n-2);\n}\n\nconst n = 10;\nfor (let i = 0; i < n; i++) {\n  console.log(fibonacci(i));\n}',
+    java: 'public class Fibonacci {\n  static int fibonacci(int n) {\n    if (n <= 1) return n;\n    return fibonacci(n-1) + fibonacci(n-2);\n  }\n  public static void main(String[] args) {\n    int n = 10;\n    for (int i = 0; i < n; i++) {\n      System.out.println(fibonacci(i));\n    }\n  }\n}',
+    cpp: '#include <iostream>\nint fibonacci(int n) {\n  if (n <= 1) return n;\n  return fibonacci(n-1) + fibonacci(n-2);\n}\nint main() {\n  int n = 10;\n  for (int i = 0; i < n; i++) {\n    std::cout << fibonacci(i) << std::endl;\n  }\n  return 0;\n}',
+    typescript: 'function fibonacci(n: number): number {\n  if (n <= 1) return n;\n  return fibonacci(n-1) + fibonacci(n-2);\n}\nconst n = 10;\nfor (let i = 0; i < n; i++) {\n  console.log(fibonacci(i));\n}',
+    go: 'package main\nimport "fmt"\nfunc fibonacci(n int) int {\n  if n <= 1 { return n }\n  return fibonacci(n-1) + fibonacci(n-2)\n}\nfunc main() {\n  n := 10\n  for i := 0; i < n; i++ {\n    fmt.Println(fibonacci(i))\n  }\n}',
+  },
+  class: {
+    python: 'class Animal:\n  def __init__(self, name):\n    self.name = name\n  def speak(self):\n    return f"{self.name} makes a sound"\n\nclass Dog(Animal):\n  def speak(self):\n    return f"{self.name} barks"\n\ndog = Dog("Buddy")\nprint(dog.speak())',
+    javascript: 'class Animal {\n  constructor(name) {\n    this.name = name;\n  }\n  speak() {\n    return `${this.name} makes a sound`;\n  }\n}\n\nclass Dog extends Animal {\n  speak() {\n    return `${this.name} barks`;\n  }\n}\n\nconst dog = new Dog("Buddy");\nconsole.log(dog.speak());',
+    java: 'public class Main {\n  public static void main(String[] args) {\n    var dog = new Dog("Buddy");\n    System.out.println(dog.speak());\n  }\n}\n\nclass Animal {\n  protected String name;\n  Animal(String name) { this.name = name; }\n  String speak() { return name + " makes a sound"; }\n}\n\nclass Dog extends Animal {\n  Dog(String name) { super(name); }\n  @Override String speak() { return name + " barks"; }\n}',
+    cpp: '#include <iostream>\n#include <string>\nclass Animal {\nprotected:\n  std::string name;\npublic:\n  Animal(std::string n) : name(n) {}\n  virtual std::string speak() { return name + " makes a sound"; }\n};\nclass Dog : public Animal {\npublic:\n  Dog(std::string n) : Animal(n) {}\n  std::string speak() override { return name + " barks"; }\n};\nint main() {\n  Dog dog("Buddy");\n  std::cout << dog.speak() << std::endl;\n  return 0;\n}',
+    typescript: 'class Animal {\n  constructor(public name: string) {}\n  speak(): string {\n    return `${this.name} makes a sound`;\n  }\n}\n\nclass Dog extends Animal {\n  speak(): string {\n    return `${this.name} barks`;\n  }\n}\n\nconst dog = new Dog("Buddy");\nconsole.log(dog.speak());',
+    go: 'package main\nimport "fmt"\ntype Animal struct {\n  name string\n}\nfunc (a Animal) Speak() string { return a.name + " makes a sound" }\ntype Dog struct{ Animal }\nfunc (d Dog) Speak() string { return d.name + " barks" }\nfunc main() {\n  dog := Dog{Animal{name: "Buddy"}}\n  fmt.Println(dog.Speak())\n}',
+  },
+  sort: {
+    python: 'def bubble_sort(arr):\n  n = len(arr)\n  for i in range(n):\n    for j in range(0, n-i-1):\n      if arr[j] > arr[j+1]:\n        arr[j], arr[j+1] = arr[j+1], arr[j]\n  return arr\n\nnums = [64, 34, 25, 12, 22, 11, 90]\nprint(bubble_sort(nums))',
+    javascript: 'function bubbleSort(arr) {\n  const n = arr.length;\n  for (let i = 0; i < n; i++) {\n    for (let j = 0; j < n-i-1; j++) {\n      if (arr[j] > arr[j+1]) {\n        [arr[j], arr[j+1]] = [arr[j+1], arr[j]];\n      }\n    }\n  }\n  return arr;\n}\nconst nums = [64, 34, 25, 12, 22, 11, 90];\nconsole.log(bubbleSort(nums));',
+    java: 'import java.util.Arrays;\npublic class Sort {\n  static void bubbleSort(int[] arr) {\n    int n = arr.length;\n    for (int i = 0; i < n; i++) {\n      for (int j = 0; j < n-i-1; j++) {\n        if (arr[j] > arr[j+1]) {\n          int t = arr[j]; arr[j] = arr[j+1]; arr[j+1] = t;\n        }\n      }\n    }\n  }\n  public static void main(String[] args) {\n    int[] nums = {64, 34, 25, 12, 22, 11, 90};\n    bubbleSort(nums);\n    System.out.println(Arrays.toString(nums));\n  }\n}',
+    cpp: '#include <iostream>\nvoid bubbleSort(int arr[], int n) {\n  for (int i = 0; i < n; i++)\n    for (int j = 0; j < n-i-1; j++)\n      if (arr[j] > arr[j+1])\n        std::swap(arr[j], arr[j+1]);\n}\nint main() {\n  int nums[] = {64, 34, 25, 12, 22, 11, 90};\n  int n = sizeof(nums)/sizeof(nums[0]);\n  bubbleSort(nums, n);\n  for (int i = 0; i < n; i++) std::cout << nums[i] << " ";\n  return 0;\n}',
+    typescript: 'function bubbleSort(arr: number[]): number[] {\n  const n = arr.length;\n  for (let i = 0; i < n; i++) {\n    for (let j = 0; j < n-i-1; j++) {\n      if (arr[j] > arr[j+1]) {\n        [arr[j], arr[j+1]] = [arr[j+1], arr[j]];\n      }\n    }\n  }\n  return arr;\n}\nconst nums: number[] = [64, 34, 25, 12, 22, 11, 90];\nconsole.log(bubbleSort(nums));',
+    go: 'package main\nimport "fmt"\nfunc bubbleSort(arr []int) {\n  n := len(arr)\n  for i := 0; i < n; i++ {\n    for j := 0; j < n-i-1; j++ {\n      if arr[j] > arr[j+1] {\n        arr[j], arr[j+1] = arr[j+1], arr[j]\n      }\n    }\n  }\n}\nfunc main() {\n  nums := []int{64, 34, 25, 12, 22, 11, 90}\n  bubbleSort(nums)\n  fmt.Println(nums)\n}',
+  },
+};
+
+// ============================================================
+// 转换引擎 — 已修复：支持中文全角引号、Unicode 字符
+// ============================================================
+const CONVERTERS = {
+  // ---- Python -> JavaScript ----
+  python_javascript(code) {
+    let r = code;
+    r = r.replace(/# (.*)/g, '// $1');
+    r = r.replace(/def\s+(\w+)\s*\(([^)]*)\)\s*:/g, 'function $1($2) {');
+    r = r.replace(/print\s*\(([^)]*)\)/g, 'console.log($1);');
+    r = r.replace(/input\s*\(([^)]*)\)/g, 'prompt($1)');
+    r = r.replace(/elif\s+/g, '} else if ');
+    r = r.replace(/else\s*:/g, '} else {');
+    r = r.replace(/(\b(?:if|while|for)\s*\([^)]*\))\s*:/g, '$1 {');
+    r = r.replace(/(\b(?:if|while|for)\s[^:]+):/g, '$1 {');
+    r = r.replace(/range\s*\(\s*(\d+)\s*\)/g, (_,n) => `Array.from({length:${n}},(_,i)=>i)`);
+    r = r.replace(/range\s*\(\s*(\w+)\s*\)/g, (_,v) => `Array.from({length:${v}},(_,i)=>i)`);
+    r = r.replace(/\blen\s*\(([^)]*)\)/g, '$1.length');
+    r = r.replace(/self\./g, 'this.');
+    r = r.replace(/\b__init__\b/g, 'constructor');
+    r = r.replace(/class\s+(\w+)\s*\(([^)]*)\)\s*:/g, 'class $1 extends $2 {');
+    r = r.replace(/class\s+(\w+)\s*:/g, 'class $1 {');
+    r = r.replace(/\bTrue\b/g, 'true');
+    r = r.replace(/\bFalse\b/g, 'false');
+    r = r.replace(/\bNone\b/g, 'null');
+    r = r.replace(/\band\b/g, '&&');
+    r = r.replace(/\bor\b/g, '||');
+    r = r.replace(/\bnot\s+/g, '!');
+    r = r.replace(/\.append\s*\(/g, '.push(');
+    r = r.replace(/del\s+(\w+)\[([^\]]+)\]/g, 'delete $1[$2]');
+    r = r.replace(/(\w+)\s+in\s+(\w+)/g, (m,a,b) => `${b}.includes(${a})`);
+    r = r.replace(/for\s+(\w+)\s+in\s+(\w+)\s*\{/g, 'for (let $1 of $2) {');
+    r = r.replace(/except\s+(\w+)\s*:/g, 'catch ($1) {');
+    r = r.replace(/except\s*:/g, 'catch {');
+    r = r.replace(/try\s*:/g, 'try {');
+    r = r.replace(/finally\s*:/g, 'finally {');
+    // 列表推导 [x for x in y] -> y.map(x=>x)
+    r = r.replace(/\[(\w+)\s+for\s+\w+\s+in\s+(\w+)\]/g, (_,x,y) => `${y}.map(${x}=>${x})`);
+    // f-string — 同时处理 ASCII 引号和全角引号 \u201C\u201D\u2018\u2019
+    r = r.replace(/f["\u201C\u201D]/g, '`');
+    r = r.replace(/f['\u2018\u2019]/g, '`');
+    r = r.replace(/\u201C/g, '`').replace(/\u201D/g, '`');
+    return r;
+  },
+
+  // ---- JavaScript -> Python ----
+  javascript_python(code) {
+    let r = code;
+    r = r.replace(/\/\/\s*(.*)/g, '# $1');
+    r = r.replace(/console\.log\s*\(([^)]*)\)/g, 'print($1)');
+    r = r.replace(/prompt\s*\(([^)]*)\)/g, 'input($1)');
+    r = r.replace(/function\s+(\w+)\s*\(([^)]*)\)\s*\{/g, 'def $1($2):');
+    r = r.replace(/(\w+)\s*=\s*\(([^)]*)\)\s*=>\s*\{/g, 'def $1($2):');
+    r = r.replace(/\b(const|let|var)\s+/g, '');
+    r = r.replace(/===/g, '==');
+    r = r.replace(/!==/g, '!=');
+    r = r.replace(/this\./g, 'self.');
+    r = r.replace(/\bconstructor\b/g, '__init__');
+    r = r.replace(/class\s+(\w+)\s+extends\s+(\w+)\s*\{/g, 'class $1($2):');
+    r = r.replace(/class\s+(\w+)\s*\{/g, 'class $1:');
+    r = r.replace(/\btrue\b/g, 'True');
+    r = r.replace(/\bfalse\b/g, 'False');
+    r = r.replace(/\bnull\b/g, 'None');
+    r = r.replace(/&&/g, 'and');
+    r = r.replace(/\|\|/g, 'or');
+    r = r.replace(/!\s*(\w+)/g, 'not $1');
+    r = r.replace(/\.push\s*\(/g, '.append(');
+    r = r.replace(/(\w+)\.length\b/g, 'len($1)');
+    r = r.replace(/(\w+)\.includes\(([^)]*)\)/g, '$2 in $1');
+    r = r.replace(/for\s*\(let\s+(\w+)\s+of\s+(\w+)\)\s*\{/g, 'for $1 in $2:');
+    r = r.replace(/try\s*\{/g, 'try:');
+    r = r.replace(/catch\s*\(([^)]*)\)\s*\{/g, 'except $1:');
+    r = r.replace(/catch\s*\{/g, 'except:');
+    r = r.replace(/}\s*else\s+if\s*\(/g, 'elif ');
+    r = r.replace(/;\s*$/gm, '');
+    // 模板字符串 -> f-string（保留中文全角反引号？通常不会出现）
+    r = r.replace(/`([^`]*)`/g, (m, s) => {
+      let fs = s.replace(/\$\{([^}]+)\}/g, '{$1}');
+      return fs.includes('{') ? `f"${fs}"` : `"${fs}"`;
+    });
+    r = r.replace(/\bnew\s+/g, '');
+    return r;
+  },
+
+  // ---- Python -> Java ----
+  python_java(code) {
+    let r = code;
+    const lines = r.split('\n');
+    let hasClass = /^\s*class\s+\w+/m.test(r);
+    let hasDef = /^\s*def\s+\w+/m.test(r);
+    let result = [];
+    let indent = 0;
+    if (hasDef && !hasClass) {
+      result.push('public class Main {');
+      for (let i = 0; i < lines.length; i++) {
+        let line = lines[i];
+        let trimmed = line.trim();
+        if (/^def\s+(\w+)/.test(trimmed)) {
+          let m = trimmed.match(/^def\s+(\w+)\s*\(([^)]*)\)\s*:/);
+          if (m) {
+            let params = m[2].split(',').map(s => s.trim()).filter(Boolean);
+            let ps = params.map(p => {
+              if (p.includes('self')) return null;
+              return `int ${p}`;
+            }).filter(Boolean).join(', ');
+            result.push(`  public static void ${m[1]}(${ps || 'String[] args'}) {`);
+            indent = 2;
+            continue;
+          }
+        }
+        if (trimmed.startsWith('print(')) {
+          let arg = trimmed.slice(6, -1);
+          result.push(`${'  '.repeat(indent)}System.out.println(${arg});`);
+          continue;
+        }
+        result.push(trimmed ? `${'  '.repeat(indent)}${trimmed}` : '');
+      }
+      result.push('}');
+      r = result.join('\n');
+    } else {
+      r = r.replace(/# (.*)/g, '// $1');
+      r = r.replace(/print\s*\(([^)]*)\)/g, 'System.out.println($1);');
+      r = r.replace(/self\./g, 'this.');
+      r = r.replace(/\bTrue\b/g, 'true');
+      r = r.replace(/\bFalse\b/g, 'false');
+      r = r.replace(/\bNone\b/g, 'null');
+      r = r.replace(/\band\b/g, '&&');
+      r = r.replace(/\bor\b/g, '||');
+      r = r.replace(/\bnot\s+/g, '!');
+    }
+    return r;
+  },
+
+  // ---- Java -> Python ----
+  java_python(code) {
+    let r = code;
+    r = r.replace(/\/\/\s*(.*)/g, '# $1');
+    r = r.replace(/System\.out\.println\s*\(([^)]*)\)/g, 'print($1)');
+    r = r.replace(/System\.out\.print\s*\(([^)]*)\)/g, 'print($1, end="")');
+    r = r.replace(/public\s+(static\s+)?(void|int|String|boolean|float|double)\s+(\w+)\s*\(/g, 'def $3(');
+    r = r.replace(/int\s+(\w+)\s*=/g, '$1 =');
+    r = r.replace(/String\s+(\w+)\s*=/g, '$1 =');
+    r = r.replace(/boolean\s+(\w+)\s*=/g, '$1 =');
+    r = r.replace(/this\./g, 'self.');
+    r = r.replace(/\btrue\b/g, 'True');
+    r = r.replace(/\bfalse\b/g, 'False');
+    r = r.replace(/\bnull\b/g, 'None');
+    r = r.replace(/System\.in/g, 'input()');
+    r = r.replace(/scanner/i, 'input');
+    r = r.replace(/new\s+\w+\(([^)]*)\)/g, '$1');
+    r = r.replace(/\.length\b/g, '');
+    r = r.replace(/;\s*$/gm, '');
+    r = r.replace(/\belse if\b/g, 'elif');
+    r = r.replace(/\bextends\s+(\w+)/g, '($1)');
+    r = r.replace(/@Override\s*/g, '');
+    r = r.replace(/public\s+class\s+(\w+)/g, 'class $1:');
+    return r;
+  },
+
+  // ---- Python -> C++ ----
+  python_cpp(code) {
+    // 行级处理：先分离函数定义和顶层代码，最终组装
+    let lines = code.split('\n');
+    let nonEmpty = lines.filter(l => l.trim() && !l.trim().startsWith('#'));
+    if (nonEmpty.length === 0) return '';
+
+    let hasMainDef = nonEmpty.some(l => /^\s*def\s+main\s*\(/.test(l));
+    let funcs = [];           // {type:'func', name, params, bodyLines[], indent}
+    let topLevel = [];        // {line, indent}
+    let currentFunc = null;   // 当前正在解析的函数
+    let classes = [];
+
+    // 第一遍：识别函数和顶层代码
+    for (let i = 0; i < lines.length; i++) {
+      let raw = lines[i];
+      let t = raw.trim();
+      let indent = raw.length - raw.trimStart().length;
+      if (!t) {
+        if (currentFunc) currentFunc.bodyLines.push(raw);
+        else if (i > 0 && i < lines.length - 1) topLevel.push({ line: raw, indent });
+        continue;
+      }
+      if (t.startsWith('#')) { continue; }
+
+      if (/^def\s+(\w+)\s*\(([^)]*)\)\s*:/.test(t)) {
+        if (currentFunc) {
+          funcs.push(currentFunc);
+        }
+        let m = t.match(/^def\s+(\w+)\s*\(([^)]*)\)\s*:/);
+        let params = m[2].split(',').map(s => s.trim()).filter(p => p && p !== 'self');
+        let ps = params.map(p => {
+          if (/^[0-9]/.test(p) || /^".*"$/.test(p) || !/^[a-zA-Z_]/.test(p)) return null;
+          return `int ${p}`;
+        }).filter(Boolean).join(', ');
+        currentFunc = { name: m[1], params: ps, bodyLines: [], indent, isMain: m[1] === 'main' };
+        continue;
+      }
+      if (/^class\s+/.test(t) && currentFunc) {
+        funcs.push(currentFunc);
+        currentFunc = null;
+        classes.push({ line: raw, indent });
+        continue;
+      }
+      if (currentFunc) {
+        if (indent > currentFunc.indent) {
+          currentFunc.bodyLines.push(raw);
+        } else {
+          // 缩进回到函数定义级别 → 函数结束
+          funcs.push(currentFunc);
+          currentFunc = null;
+          topLevel.push({ line: raw, indent });
+        }
+      } else {
+        topLevel.push({ line: raw, indent });
+      }
+    }
+    if (currentFunc) funcs.push(currentFunc);
+
+    let out = [];
+    out.push('#include <iostream>', '#include <string>', '#include <vector>', 'using namespace std;', '');
+
+    // 输出函数定义
+    for (let f of funcs) {
+      let retType = f.isMain ? 'int' : 'void';
+      out.push(`${retType} ${f.name}(${f.params || ''}) {`);
+      for (let line of f.bodyLines) {
+        let tl = line.trim();
+        if (!tl) { out.push(''); continue; }
+        if (tl.startsWith('#')) { out.push('  // ' + tl.slice(1).trim()); continue; }
+        out.push(convertCppLine(tl, 1));
+      }
+      if (f.isMain) out.push(convertCppLine('return 0', 1));
+      out.push('}');
+      out.push('');
+    }
+
+    // 顶层代码 → 包装到 int main
+    if (topLevel.length > 0 && !hasMainDef) {
+      out.push('int main() {');
+      for (let item of topLevel) {
+        let tl = item.line.trim();
+        if (!tl) { out.push(''); continue; }
+        if (tl.startsWith('#')) { out.push('  // ' + tl.slice(1).trim()); continue; }
+        out.push(convertCppLine(tl, 1));
+      }
+      out.push(convertCppLine('return 0', 1));
+      out.push('}');
+    } else if (hasMainDef && topLevel.length > 0) {
+      for (let i = 0; i < funcs.length; i++) {
+        if (funcs[i].isMain) {
+          for (let item of topLevel) {
+            let tl = item.line.trim();
+            if (tl && !tl.startsWith('#')) {
+              funcs[i].bodyLines.push(item.line);
+            }
+          }
+          break;
+        }
+      }
+      out.length = 0;
+      out.push('#include <iostream>', '#include <string>', '#include <vector>', 'using namespace std;', '');
+      for (let f of funcs) {
+        let retType = f.isMain ? 'int' : 'void';
+        out.push(`${retType} ${f.name}(${f.params || ''}) {`);
+        for (let line of f.bodyLines) {
+          let tl = line.trim();
+          if (!tl) { out.push(''); continue; }
+          if (tl.startsWith('#')) { out.push('  // ' + tl.slice(1).trim()); continue; }
+          out.push(convertCppLine(tl, 1));
+        }
+        if (f.isMain) out.push(convertCppLine('return 0', 1));
+        out.push('}');
+        out.push('');
+      }
+    }
+
+    function convertCppLine(line, depth) {
+      let t = line.trim();
+      let ind = '  '.repeat(depth);
+      // print()
+      let pm = t.match(/^print\s*\(([^)]*)\)/);
+      if (pm) {
+        let arg = pm[1].replace(/f["\u201C\u201D]/g, '"');
+        return `${ind}cout << ${arg} << endl;`;
+      }
+      // for in range
+      let fm = t.match(/^for\s+(\w+)\s+in\s+range\((\d+)\)/);
+      if (fm) {
+        return `${ind}for (int ${fm[1]} = 0; ${fm[1]} < ${fm[2]}; ${fm[1]}++) {`;
+      }
+      // for in iterable
+      let fm2 = t.match(/^for\s+(\w+)\s+in\s+(\w+)/);
+      if (fm2) {
+        return `${ind}for (int ${fm2[1]} : ${fm2[2]}) {`;
+      }
+      // if / elif / else
+      if (/^if\s+/.test(t)) {
+        return `${ind}${t.replace(/:\s*$/, ' {')}`;
+      }
+      if (/^elif\s+/.test(t)) {
+        return `${ind}} else ${t.replace(/^elif/, 'if').replace(/:\s*$/, ' {')}`;
+      }
+      if (/^else\s*:/.test(t)) {
+        return `${ind}} else {`;
+      }
+      // while
+      if (/^while\s+/.test(t)) {
+        return `${ind}${t.replace(/:\s*$/, ' {')}`;
+      }
+      // return
+      if (/^return\s+/.test(t)) {
+        return `${ind}${t};`;
+      }
+      // 普通语句
+      return `${ind}${t};`;
+    }
+
+    r = out.join('\n');
+    r = r.replace(/\bTrue\b/g, 'true');
+    r = r.replace(/\bFalse\b/g, 'false');
+    r = r.replace(/\bNone\b/g, 'nullptr');
+    r = r.replace(/self\./g, 'this->');
+    r = r.replace(/\n{3,}/g, '\n\n');
+    return r;
+  },
+
+  // ---- C++ -> Python ----
+  cpp_python(code) {
+    let r = code;
+    r = r.replace(/\/\/\s*(.*)/g, '# $1');
+    r = r.replace(/cout\s*<<\s*(.*?)\s*<<\s*endl/g, 'print($1)');
+    r = r.replace(/cout\s*<<\s*(.*?)\s*;/g, 'print($1)');
+    r = r.replace(/cin\s*>>\s*(\w+)/g, '$1 = int(input())');
+    r = r.replace(/#include\s*<[^>]+>/g, '');
+    r = r.replace(/using namespace std;/g, '');
+    r = r.replace(/int\s+main\s*\([^)]*\)\s*\{/g, 'def main():');
+    r = r.replace(/void\s+(\w+)\s*\(([^)]*)\)\s*\{/g, 'def $1($2):');
+    r = r.replace(/int\s+(\w+)\s*\(([^)]*)\)\s*\{/g, 'def $1($2):');
+    r = r.replace(/;\s*$/gm, '');
+    r = r.replace(/\btrue\b/g, 'True');
+    r = r.replace(/\bfalse\b/g, 'False');
+    r = r.replace(/\bnullptr\b/g, 'None');
+    r = r.replace(/this->/g, 'self.');
+    r = r.replace(/public:|private:|protected:/g, '');
+    r = r.replace(/virtual\s+/g, '');
+    r = r.replace(/\boverride\b/g, '');
+    r = r.replace(/std::/g, '');
+    r = r.replace(/\n{3,}/g, '\n\n');
+    return r.trim();
+  },
+
+  // ---- JS -> TS ----
+  javascript_typescript(code) {
+    let r = code;
+    r = r.replace(/function\s+(\w+)\s*\(([^)]*)\)\s*\{/g, (m,name,params) => {
+      let ps = params.split(',').filter(Boolean).map(p => `${p.trim()}: any`).join(', ');
+      return `function ${name}(${ps}): any {`;
+    });
+    r = r.replace(/const\s+(\w+)\s*=/g, 'const $1: any =');
+    r = r.replace(/let\s+(\w+)\s*=/g, 'let $1: any =');
+    return r;
+  },
+
+  // ---- TS -> JS ----
+  typescript_javascript(code) {
+    let r = code;
+    r = r.replace(/:\s*(\w+)(\s*[=,)\]])/g, '$2');
+    r = r.replace(/:\s*(\w+)\s*(\()/g, '$2');
+    r = r.replace(/:\s*(\w+(?:\[\])?)\s*\{/g, ' {');
+    r = r.replace(/:\s*(\w+(?:\[\])?)\s*$/gm, '');
+    r = r.replace(/interface\s+\w+\s*\{[^}]*\}/g, '');
+    r = r.replace(/type\s+\w+\s*=[^;]*;/g, '');
+    return r;
+  },
+
+  // ---- Python -> Go ----
+  python_go(code) {
+    let r = code;
+    let lines = r.split('\n');
+    let result = ['package main', '', 'import "fmt"', ''];
+    let hasMain = false;
+    for (let line of lines) {
+      let t = line.trim();
+      if (!t || t.startsWith('#')) {
+        if (t.startsWith('#')) result.push('// ' + t.slice(1).trim());
+        else result.push('');
+        continue;
+      }
+      let m = t.match(/def\s+(\w+)\s*\(([^)]*)\)\s*:/);
+      if (m) {
+        let params = m[2].split(',').map(s => s.trim()).filter(p => p && p !== 'self');
+        let ps = params.map(p => `${p} int`).join(', ');
+        result.push(`func ${m[1]}(${ps}) int {`);
+        if (m[1] === 'main') hasMain = true;
+        continue;
+      }
+      let pm = t.match(/print\s*\(([^)]*)\)/);
+      if (pm) {
+        let arg = pm[1].replace(/f["\u201C\u201D]/g, '"');
+        if (/,$/.test(arg)) arg = arg.slice(0, -1);
+        result.push(`\tfmt.Println(${arg})`);
+        continue;
+      }
+      if (/^class\s+/.test(t)) { result.push('// ' + t); continue; }
+      if (/^for\s+/.test(t)) {
+        let fm = t.match(/for\s+(\w+)\s+in\s+range\((\d+)\)/);
+        if (fm) result.push(`\tfor ${fm[1]} := 0; ${fm[1]} < ${fm[2]}; ${fm[1]}++ {`);
+        else {
+          let fm2 = t.match(/for\s+(\w+)\s+in\s+(\w+)/);
+          if (fm2) result.push(`\tfor _, ${fm2[1]} := range ${fm2[2]} {`);
+          else result.push('\t' + t);
+        }
+        continue;
+      }
+      if (/^if\s+/.test(t)) { result.push('\t' + t.replace(/:/g, ' {')); continue; }
+      if (/^else\s*:/.test(t)) { result.push('\t} else {'); continue; }
+      if (/^elif\s+/.test(t)) { result.push('\t} else ' + t.replace(/^elif/, 'if').replace(/:/g, ' {')); continue; }
+      if (/return\s+/.test(t)) { result.push('\t' + t); continue; }
+      result.push('\t' + t);
+    }
+    if (!hasMain) result.push('func main() {', '\t// TODO', '}');
+    r = result.join('\n');
+    r = r.replace(/\bTrue\b/g, 'true');
+    r = r.replace(/\bFalse\b/g, 'false');
+    r = r.replace(/\bNone\b/g, 'nil');
+    r = r.replace(/self\./g, '');
+    return r;
+  },
+
+  // ---- Go -> Python ----
+  go_python(code) {
+    let r = code;
+    r = r.replace(/\/\/\s*(.*)/g, '# $1');
+    r = r.replace(/fmt\.Println\s*\(([^)]*)\)/g, 'print($1)');
+    r = r.replace(/fmt\.Printf\s*\([^)]*\)/g, 'print(...)');
+    r = r.replace(/func\s+(\w+)\s*\(([^)]*)\)\s*(int|string|bool|float64)?\s*\{/g, (m,name,params) => {
+      let ps = params.split(',').map(s => s.trim()).filter(Boolean);
+      ps = ps.map(p => p.replace(/\s+\w+$/, '').trim()).filter(Boolean);
+      return `def ${name}(${ps.join(', ')}):`;
+    });
+    r = r.replace(/func\s+main\s*\([^)]*\)\s*\{/g, 'def main():');
+    r = r.replace(/package\s+\w+/g, '');
+    r = r.replace(/import\s*"[^"]*"/g, '');
+    r = r.replace(/var\s+(\w+)\s+(\w+)\s*=/g, '$1 =');
+    r = r.replace(/(\w+)\s*:=\s*/g, '$1 = ');
+    r = r.replace(/for\s+(\w+)\s*:=\s*(\d+);\s*\w+\s*<\s*(\d+);\s*\w+\+\+\s*\{/g, 'for $1 in range($3):');
+    r = r.replace(/for\s+_,\s*(\w+)\s*:=\s*range\s*\(([^)]*)\)\s*\{/g, 'for $1 in $2:');
+    r = r.replace(/for\s+\{/g, 'while True:');
+    r = r.replace(/\btrue\b/g, 'True');
+    r = r.replace(/\bfalse\b/g, 'False');
+    r = r.replace(/\bnil\b/g, 'None');
+    r = r.replace(/fmt\.Scan\s*\(&([^)]*)\)/g, '$1 = input()');
+    r = r.replace(/;\s*$/gm, '');
+    return r.trim();
+  },
+
+  fallback(code, from, to) {
+    return `// 转换 ${from} -> ${to} 暂不支持完整规则\n// 以下为原始代码:\n\n${code}`;
+  }
+};
+
+function convertCode(code, from, to) {
+  if (!code.trim()) return '';
+  const key = `${from}_${to}`;
+  if (CONVERTERS[key]) {
+    try { return CONVERTERS[key](code); }
+    catch (e) { return `// 转换出错: ${e.message}\n\n${code}`; }
+  }
+  return CONVERTERS.fallback(code, from, to);
+}
+
+// ============================================================
+// UI 交互
+// ============================================================
+const fromLang = document.getElementById('fromLang');
+const toLang = document.getElementById('toLang');
+const fromLabel = document.getElementById('fromLabel');
+const toLabel = document.getElementById('toLabel');
+const fromStats = document.getElementById('fromStats');
+const toStats = document.getElementById('toStats');
+const statusMsg = document.getElementById('statusMsg');
+const statusExtra = document.getElementById('statusExtra');
+const convertBtn = document.getElementById('convertBtn');
+const themeToggle = document.getElementById('themeToggle');
+let isConverting = false;
+
+const CM_MODE = {
+  python: 'python', javascript: 'javascript', java: 'text/x-java',
+  cpp: 'text/x-c++src', typescript: 'text/typescript', go: 'go',
+};
+
+const sourceEditor = CodeMirror.fromTextArea(document.getElementById('sourceCode'), {
+  mode: CM_MODE[fromLang.value],
+  lineNumbers: true, matchBrackets: true,
+  indentUnit: 2, tabSize: 2, lineWrapping: false,
+  foldGutter: true, gutters: ['CodeMirror-foldgutter', 'CodeMirror-linenumbers'],
+  styleActiveLine: true, placeholder: '在此粘贴源代码...',
+});
+
+const resultEditor = CodeMirror.fromTextArea(document.getElementById('resultCode'), {
+  mode: CM_MODE[toLang.value],
+  lineNumbers: true, matchBrackets: true,
+  indentUnit: 2, tabSize: 2, lineWrapping: false,
+  readOnly: true,
+  foldGutter: true, gutters: ['CodeMirror-foldgutter', 'CodeMirror-linenumbers'],
+  placeholder: '转换后的代码将显示在此处...',
+});
+
+function syncSourceMode() { sourceEditor.setOption('mode', CM_MODE[fromLang.value]); }
+function syncResultMode() { resultEditor.setOption('mode', CM_MODE[toLang.value]); }
+
+function setTheme(theme) {
+  document.body.classList.toggle('light', theme === 'light');
+  themeToggle.textContent = theme === 'light' ? '\u2600' : '\u263E';
+  try { localStorage.setItem('code-converter-theme', theme); } catch {}
+}
+function toggleTheme() { setTheme(document.body.classList.contains('light') ? 'dark' : 'light'); }
+try {
+  const saved = localStorage.getItem('code-converter-theme');
+  if (saved) setTheme(saved);
+  else if (window.matchMedia('(prefers-color-scheme: light)').matches) setTheme('light');
+} catch {}
+
+function updateLabels() {
+  fromLabel.textContent = LANG_INFO[fromLang.value].name;
+  toLabel.textContent = LANG_INFO[toLang.value].name;
+}
+function updateStats() {
+  fromStats.textContent = `${sourceEditor.lineCount()} 行`;
+  toStats.textContent = `${resultEditor.lineCount()} 行`;
+}
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.classList.remove('show'), 2000);
+}
+function updateConvertBtn() { convertBtn.disabled = !sourceEditor.getValue().trim(); }
+
+function doConvert() {
+  if (isConverting) return;
+  const code = sourceEditor.getValue();
+  const from = fromLang.value;
+  const to = toLang.value;
+  if (!code.trim()) {
+    resultEditor.setValue('');
+    statusMsg.textContent = '请先输入代码'; statusMsg.className = '';
+    updateStats(); return;
+  }
+  isConverting = true;
+  convertBtn.disabled = true;
+  convertBtn.innerHTML = '<span class="spinner"></span> 转换中';
+  statusMsg.textContent = '转换中...'; statusMsg.className = '';
+  const start = performance.now();
+  setTimeout(() => {
+    try {
+      const result = convertCode(code, from, to);
+      const elapsed = ((performance.now() - start) / 1000).toFixed(2);
+      resultEditor.setValue(result);
+      updateStats();
+      if (from === to) {
+        statusMsg.textContent = `提示: 源语言和目标语言相同 (${elapsed}s)`;
+      } else if (result.startsWith('// 转换')) {
+        statusMsg.textContent = `部分转换 (${elapsed}s)`; statusMsg.className = 'error';
+        showToast('该语言组合暂未实现完整转换规则');
+      } else {
+        statusMsg.textContent = `转换完成 (${elapsed}s)`; statusMsg.className = 'success';
+      }
+      statusExtra.textContent = `${result.split('\n').length} 行`;
+    } catch (e) {
+      statusMsg.textContent = '转换失败'; statusMsg.className = 'error';
+      showToast(`转换出错: ${e.message}`);
+    } finally {
+      isConverting = false;
+      convertBtn.disabled = false;
+      convertBtn.innerHTML = '&#9654; 转换';
+    }
+  }, 80);
+}
+
+function swapLanguages() {
+  const tmp = fromLang.value;
+  fromLang.value = toLang.value; toLang.value = tmp;
+  updateLabels(); syncSourceMode(); syncResultMode();
+  doConvert();
+}
+
+function loadExample(name) {
+  const from = fromLang.value;
+  const ex = EXAMPLES[name];
+  if (ex && ex[from]) {
+    sourceEditor.setValue(ex[from]); updateStats(); doConvert();
+  } else {
+    for (const lang of Object.keys(ex || {})) {
+      sourceEditor.setValue(ex[lang]);
+      fromLang.value = lang;
+      updateLabels(); syncSourceMode(); updateStats(); doConvert();
+      return;
+    }
+    sourceEditor.setValue('// 该语言暂无示例');
+  }
+}
+
+function copyResult() {
+  const text = resultEditor.getValue();
+  if (!text) { showToast('没有可复制的内容'); return; }
+  navigator.clipboard.writeText(text).then(() => showToast('已复制到剪贴板'))
+    .catch(() => { const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); showToast('已复制到剪贴板'); });
+}
+
+// ---- 事件绑定 ----
+document.getElementById('convertBtn').addEventListener('click', doConvert);
+document.getElementById('swapBtn').addEventListener('click', swapLanguages);
+document.getElementById('themeToggle').addEventListener('click', toggleTheme);
+document.getElementById('clearBtn').addEventListener('click', () => {
+  sourceEditor.setValue(''); updateConvertBtn(); updateStats();
+  statusMsg.textContent = '已清空源码'; statusMsg.className = ''; statusExtra.textContent = '';
+});
+document.getElementById('clearAllBtn').addEventListener('click', () => {
+  sourceEditor.setValue(''); resultEditor.setValue(''); updateConvertBtn(); updateStats();
+  statusMsg.textContent = '已清空全部'; statusMsg.className = ''; statusExtra.textContent = '';
+  showToast('已清空双编辑器');
+});
+document.getElementById('copyBtn').addEventListener('click', copyResult);
+
+fromLang.addEventListener('change', () => { updateLabels(); syncSourceMode(); if (sourceEditor.getValue().trim()) doConvert(); });
+toLang.addEventListener('change', () => { updateLabels(); syncResultMode(); if (sourceEditor.getValue().trim()) doConvert(); });
+
+sourceEditor.on('change', () => {
+  updateConvertBtn();
+  clearTimeout(sourceEditor._debounce);
+  sourceEditor._debounce = setTimeout(() => { updateStats(); if (sourceEditor.getValue().trim()) doConvert(); }, 500);
+});
+
+document.querySelectorAll('.chip').forEach(el => { el.addEventListener('click', () => loadExample(el.dataset.example)); });
+
+sourceEditor.setOption('extraKeys', { 'Ctrl-Enter': () => doConvert(), 'Cmd-Enter': () => doConvert() });
+
+// ---- 源码弹窗 ----
+let sourceModalEditor = null;
+document.getElementById('viewSourceBtn').addEventListener('click', () => {
+  const overlay = document.getElementById('sourceModal');
+  overlay.classList.add('open');
+  const raw = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
+  const ta = document.getElementById('modalSourceCode');
+  ta.value = raw;
+  if (!sourceModalEditor) {
+    sourceModalEditor = CodeMirror.fromTextArea(ta, {
+      mode: 'htmlmixed', lineNumbers: true, matchBrackets: true,
+      readOnly: true, lineWrapping: false,
+      foldGutter: true, gutters: ['CodeMirror-foldgutter', 'CodeMirror-linenumbers'],
+    });
+  } else {
+    sourceModalEditor.setValue(raw);
+  }
+  setTimeout(() => { sourceModalEditor.refresh(); sourceModalEditor.focus(); }, 50);
+});
+document.getElementById('modalCloseBtn').addEventListener('click', () => { document.getElementById('sourceModal').classList.remove('open'); });
+document.getElementById('sourceModal').addEventListener('click', (e) => { if (e.target === e.currentTarget) document.getElementById('sourceModal').classList.remove('open'); });
+document.getElementById('modalCopyBtn').addEventListener('click', () => {
+  const raw = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
+  navigator.clipboard.writeText(raw).then(() => showToast('已复制全部源码'))
+    .catch(() => { const ta = document.createElement('textarea'); ta.value = raw; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); showToast('已复制全部源码'); });
+});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') document.getElementById('sourceModal').classList.remove('open'); });
+
+// 初始化
+updateLabels(); updateStats(); updateConvertBtn();
+statusMsg.textContent = '就绪';
+setTimeout(() => { sourceEditor.refresh(); resultEditor.refresh(); }, 100);
+</script>
+</body>
+</html>
